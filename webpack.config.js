@@ -3,7 +3,6 @@
 'use strict';
 
 const path = require('path');
-const CopyWebpackPlugin = require('copy-webpack-plugin'); // 引入 CopyWebpackPlugin
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -42,16 +41,6 @@ const extensionConfig = {
     ]
   },
   devtool: 'nosources-source-map',
-  plugins: [
-    new CopyWebpackPlugin({
-      patterns: [
-        {
-          from: path.resolve(__dirname, 'src/html'),
-          to: 'html',
-        },
-      ],
-    }),
-  ],
   infrastructureLogging: {
     level: 'log', // enables logging required for problem matchers
   },

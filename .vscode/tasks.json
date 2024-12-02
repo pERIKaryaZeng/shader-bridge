@@ -37,14 +37,12 @@
 			"problemMatcher": []
 		},
 		{
-            "label": "webpack",
-            "type": "shell",
-            "command": "npx webpack --config webpack.config.js",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": []
-        }
+			"label": "npm: package",
+			"type": "npm",
+			"script": "package", // 对应 package.json 中的 script 名
+			"group": "build",
+			"problemMatcher": [],
+			"detail": "Runs the npm run package script to build the extension."
+		}
 	]
 }

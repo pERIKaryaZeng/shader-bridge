@@ -3,12 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // 用于存储 WebviewPanel 的全局变量
-let glslPanel: vscode.WebviewPanel | undefined;
+let panel: vscode.WebviewPanel | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     const disposable = vscode.commands.registerCommand('shader-bridge.runGLSL', (uri: vscode.Uri) => {
         if (uri) {
-            showGLSLPreview(uri);
+            showGLSLPreview(context, uri);
         } else {
             vscode.window.showErrorMessage('No GLSL file selected!');
         }
@@ -89,50 +89,53 @@ function parseGLSL(
     return currentGlobalLine - 1;
 }
 
-function showGLSLPreview(uri: vscode.Uri) {
-    // 如果 Webview 已经存在，直接更新内容
-    if (glslPanel) {
-        updateWebviewContent(glslPanel, uri);
-        glslPanel.reveal(vscode.ViewColumn.One); // 让 Webview 再次显示
-    } else {
-        // 创建新的 WebviewPanel
-        glslPanel = vscode.window.createWebviewPanel(
-            'glslPreview',
-            'GLSL Preview',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-            }
-        );
-
-        // 设置关闭时的清理逻辑
-        glslPanel.onDidDispose(() => {
-            glslPanel = undefined; // Webview 被关闭时清空引用
-        });
-
-        // 初始化 Webview 内容
-        updateWebviewContent(glslPanel, uri);
-    }
-}
-
-function updateWebviewContent(panel: vscode.WebviewPanel, uri: vscode.Uri) {
+function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, uri: vscode.Uri) {
     const filePath = uri.fsPath;
+    const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "src", 'html', 'main.js')));
 
     try {
         const fileList: FileInfo[] = [];
         const lineMappings: LineMapping[] = [];
         parseGLSL(filePath, fileList, lineMappings);
 
-        const htmlPath = path.join(__dirname, 'html', 'glsl_viewer.html');
+        const htmlPath = path.join(context.extensionPath, 'src', 'html', 'glsl_viewer.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 
         // 将文件列表和行映射数据传递给 Webview
         htmlContent = htmlContent
+            .replace('{{BASE_URI}}', baseUri.toString())
             .replace('{{FILE_LIST}}', JSON.stringify(fileList))
             .replace('{{LINE_MAPPINGS}}', JSON.stringify(lineMappings));
 
         panel.webview.html = htmlContent;
     } catch (err) {
         vscode.window.showErrorMessage(`Error processing GLSL file: ${(err as Error).message}`);
+    }
+}
+
+function showGLSLPreview(context: vscode.ExtensionContext, uri: vscode.Uri) {
+    // 如果 Webview 已经存在，直接更新内容
+    if (panel) {
+        updateWebviewContent(panel, context, uri);
+        panel.reveal(vscode.ViewColumn.One); // 让 Webview 再次显示
+    } else {
+        // 创建新的 WebviewPanel
+        panel = vscode.window.createWebviewPanel(
+            'glslPreview',
+            'GLSL Preview',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, "src"))]
+            }
+        );
+
+        // 设置关闭时的清理逻辑
+        panel.onDidDispose(() => {
+            panel = undefined; // Webview 被关闭时清空引用
+        });
+
+        // 初始化 Webview 内容
+        updateWebviewContent(panel, context, uri);
     }
 }

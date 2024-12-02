@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   
     <title>GLSL Preview</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; }
@@ -29,7 +30,16 @@
 <body>
     <div id="errorOutput" style="display:none;"></div>
     <canvas id="glCanvas"></canvas>
+    <script type="module" src="{{BASE_URI}}"></script>
     <script>
+        const baseTag = document.querySelector('base');
+        if (baseTag) {
+            console.log(baseTag.outerHTML); // 打印完整的 base 标签
+            console.log(baseTag.getAttribute('href')); // 打印 href 属性
+        } else {
+            console.log('<base> tag not found');
+        }
+        /*
         try {
             const canvas = document.getElementById('glCanvas');
             const errorOutput = document.getElementById('errorOutput');
@@ -175,7 +185,12 @@
             errorOutput.innerHTML = `${errorOutput.textContent}`;
 
             console.error(error);
-        }
+
+
+            
+        }*/
+
     </script>
+   
 </body>
 </html>
