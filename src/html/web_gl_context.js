@@ -13,7 +13,7 @@ export default class WebGLContext {
 
         this.fileList = shaderData.fileInfos;
         console.log(this.fileList);
-        this.lineMapping = shaderData.lineMappings;
+        this.lineMapping = shaderData.renderPassInfos[0].lineMappings;
         console.log(this.lineMapping);
 
         this.fragmentShaderSource = this.generateMergedGLSL();

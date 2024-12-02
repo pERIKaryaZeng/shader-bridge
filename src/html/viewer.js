@@ -15,13 +15,16 @@ export default class Viewer {
                 gl_Position = a_position;
             }
         `;
-
-
-
         const vertexShader = new Shader(this.webglContext, vertexShaderSource, this.gl.VERTEX_SHADER);
-        const fragmentShader = new Shader(this.webglContext, this.webglContext.fragmentShaderSource, this.gl.FRAGMENT_SHADER);
 
+
+
+
+        const fragmentShader = new Shader(this.webglContext, this.webglContext.fragmentShaderSource, this.gl.FRAGMENT_SHADER);
         this.shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
+
+
+        
         this.renderer = new Renderer(this.gl, this.shaderProgram);
 
         this.currentTime = 0;

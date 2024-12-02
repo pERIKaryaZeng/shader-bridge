@@ -10,7 +10,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:shader-bridge.runGLSL"
+    "onCommand:shader-bridge.runGLSL",
+    "onCommand:shader-bridge.saveAndRunGLSL"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -18,12 +19,21 @@
       {
         "command": "shader-bridge.runGLSL",
         "title": "Run GLSL File"
+      },
+      {
+        "command": "shader-bridge.saveAndRunGLSL",
+        "title": "Save and Run GLSL File"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "shader-bridge.runGLSL",
+          "when": "resourceExtname == .glsl",
+          "group": "shader-bridge"
+        },
+        {
+          "command": "shader-bridge.saveAndRunGLSL",
           "when": "resourceExtname == .glsl",
           "group": "shader-bridge"
         }
