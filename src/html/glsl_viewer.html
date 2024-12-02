@@ -29,16 +29,12 @@
 </head>
 <body>
     <div id="errorOutput" style="display:none;"></div>
+    <div id="fileList" style="display: none;">{{FILE_LIST}}</div>
+    <div id="lineMapping" style="display: none;">{{LINE_MAPPINGS}}</div>
     <canvas id="glCanvas"></canvas>
     <script type="module" src="{{BASE_URI}}"></script>
+    
     <script>
-        const baseTag = document.querySelector('base');
-        if (baseTag) {
-            console.log(baseTag.outerHTML); // 打印完整的 base 标签
-            console.log(baseTag.getAttribute('href')); // 打印 href 属性
-        } else {
-            console.log('<base> tag not found');
-        }
         /*
         try {
             const canvas = document.getElementById('glCanvas');

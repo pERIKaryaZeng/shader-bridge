@@ -135,7 +135,25 @@ function showGLSLPreview(context: vscode.ExtensionContext, uri: vscode.Uri) {
             panel = undefined; // Webview 被关闭时清空引用
         });
 
+        panel.webview.onDidReceiveMessage((message) => {
+
+            console.log("dddddddddddddddddddddddd");
+
+            if (message.command === 'openFile') {
+                const fileUri = vscode.Uri.file(message.filePath);
+                vscode.workspace.openTextDocument(fileUri).then((document) => {
+                    vscode.window.showTextDocument(document, {
+                        selection: new vscode.Range(
+                            new vscode.Position(message.lineNumber - 1, 0),
+                            new vscode.Position(message.lineNumber - 1, 0)
+                        ),
+                    });
+                });
+            }
+        });
+
         // 初始化 Webview 内容
         updateWebviewContent(panel, context, uri);
     }
 }
+

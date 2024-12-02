@@ -1,13 +1,27 @@
 import WebGLContext from './web_gl_context.js';
 import ShaderProgram from './shader_program.js';
+import Shader from './shader.js';
 import Renderer from './renderer.js';
 
 export default class Viewer {
-    constructor(canvasId, vertexShaderSource, fragmentShaderSource) {
+    constructor(canvasId) {
         this.webglContext = new WebGLContext(canvasId);
         this.gl = this.webglContext.getGL();
 
-        this.shaderProgram = new ShaderProgram(this.gl, vertexShaderSource, fragmentShaderSource);
+
+        const vertexShaderSource = `
+            attribute vec4 a_position;
+            void main() {
+                gl_Position = a_position;
+            }
+        `;
+
+
+
+        const vertexShader = new Shader(this.webglContext, vertexShaderSource, this.gl.VERTEX_SHADER);
+        const fragmentShader = new Shader(this.webglContext, this.webglContext.fragmentShaderSource, this.gl.FRAGMENT_SHADER);
+
+        this.shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
         this.renderer = new Renderer(this.gl, this.shaderProgram);
 
         this.currentTime = 0;
