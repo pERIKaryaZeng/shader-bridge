@@ -1,0 +1,62 @@
+{
+  "name": "shader-bridge",
+  "displayName": "Shader Bridge",
+  "description": "A VSCode plugin designed for displaying GLES code with built-in support to preview GLES shader results. Additionally, the plugin provides a command to convert the current project into an Android Studio project, enabling seamless development for Android platforms.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:shader-bridge.runGLSL"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "shader-bridge.runGLSL",
+        "title": "Run GLSL File"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "shader-bridge.runGLSL",
+          "when": "resourceExtname == .glsl",
+          "group": "shader-bridge"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.9",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.10.0",
+    "@typescript-eslint/parser": "^8.7.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "copy-webpack-plugin": "^12.0.2",
+    "eslint": "^9.13.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.6.3",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "glslify": "^7.1.1"
+  }
+}
