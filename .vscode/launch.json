@@ -30,6 +30,19 @@
                 "${workspaceFolder}/dist/**/*.js"
             ],
             "preLaunchTask": "npm: package"
+        },
+        {
+            "name": "Package to Extension File",
+            "type": "extensionHost",
+            "runtimeExecutable": "${execPath}",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "preLaunchTask": "vsce: package"
         }
     ]
 }

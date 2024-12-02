@@ -31,6 +31,11 @@ interface LineMapping {
     localLine: number; // 文件中的本地行号
 }
 
+interface ShaderData {
+    fileInfos: FileInfo[]; 
+    lineMappings: LineMapping[];
+}
+
 // Base64 编解码工具
 function encodeBase64(content: string): string {
     return Buffer.from(content).toString('base64');
@@ -48,16 +53,15 @@ function removeComments(content: string): string {
 
 function parseGLSL(
     filePath: string,
-    fileList: FileInfo[],
-    lineMappings: LineMapping[],
+    shaderData: ShaderData,
     startLine = 1
 ): number {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
-    const fileIndex = fileList.length;
+    const fileIndex = shaderData.fileInfos.length;
 
     // 添加当前文件到文件列表
-    fileList.push({
+    shaderData.fileInfos.push({
         filePath: encodeBase64(filePath),
         fileContent: encodeBase64(content),
     });
@@ -74,10 +78,10 @@ function parseGLSL(
             const includePath = path.resolve(path.dirname(filePath), includeMatch[1]);
 
             // 递归解析 #include 文件
-            currentGlobalLine = parseGLSL(includePath, fileList, lineMappings, currentGlobalLine);
+            currentGlobalLine = parseGLSL(includePath, shaderData, currentGlobalLine);
         } else {
             // 普通行，添加到行映射
-            lineMappings.push({
+            shaderData.lineMappings.push({
                 fileIndex,
                 localLine: i + 1, // 当前文件中的行号，从 1 开始
             });
@@ -91,12 +95,11 @@ function parseGLSL(
 
 function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, uri: vscode.Uri) {
     const filePath = uri.fsPath;
-    const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "src", 'html', 'main.js')));
+    const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "src", "html", " ")));
 
     try {
-        const fileList: FileInfo[] = [];
-        const lineMappings: LineMapping[] = [];
-        parseGLSL(filePath, fileList, lineMappings);
+        let shaderData: ShaderData = {fileInfos: [], lineMappings: []};
+        parseGLSL(filePath, shaderData);
 
         const htmlPath = path.join(context.extensionPath, 'src', 'html', 'glsl_viewer.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf-8');
@@ -104,8 +107,7 @@ function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.Extens
         // 将文件列表和行映射数据传递给 Webview
         htmlContent = htmlContent
             .replace('{{BASE_URI}}', baseUri.toString())
-            .replace('{{FILE_LIST}}', JSON.stringify(fileList))
-            .replace('{{LINE_MAPPINGS}}', JSON.stringify(lineMappings));
+            .replace('{{SHADER_DATA}}', JSON.stringify(shaderData));
 
         panel.webview.html = htmlContent;
     } catch (err) {

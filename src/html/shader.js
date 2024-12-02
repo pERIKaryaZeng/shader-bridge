@@ -26,11 +26,11 @@ export default class Shader {
                     // 构造替换字符串
                     const originalLine = match[0]; // 原始错误信息中包含 "ERROR: ...:line"
                     const replacement = `<span style="color: red; font-weight: bold;">ERROR</span>` +
-                                        `<span style="color: white;"> in</span>` +
+                                        `<span style="color: white;"> in </span>` +
                                         `<a href="#" class="file-link" data-file-path="${fileInfo.filePath}" data-line-number="${fileInfo.localLine}">` +
-                                        `<span style="color: yellow; font-family: monospace;"> ${fileInfo.filePath}</span>` +
+                                        `<span style="color: yellow; font-family: monospace;">${fileInfo.filePath}</span>` +
                                         `<span style="color: white;"> : </span>` +
-                                        `<span style="color: #00ccff; font-weight: bold;">${fileInfo.localLine}</span>` +
+                                        `<span style="color: #00ccff; font-weight: bold;">${fileInfo.localLine} </span>` +
                                         `</a>`;
 
                     // 替换错误日志中的全局行号为文件路径+本地行号

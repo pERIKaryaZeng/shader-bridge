@@ -1,71 +1,65 @@
-# shader-bridge README
+# Shader Bridge
 
-This is the README for your extension "shader-bridge". After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+Shader Bridge 是一个 Visual Studio Code 插件，专为 OpenGL ES (GLES) 开发者设计。此插件提供了代码可视化和预览功能，还支持将当前项目转换为 Android Studio 项目，方便在 Android 平台进行无缝开发。
 
 ---
 
-## Following extension guidelines
+## Features
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+- **GLSL Shader 预览**：直接在 VS Code 中可视化 GLSL Shader 代码的效果。
+- **Android Studio 项目转换**：将现有项目一键转换为 Android Studio 项目。
+- **增强的开发体验**：支持在 GLES 环境中快速调试和开发。
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+示例截图：
 
-## Working with Markdown
+\!\[GLSL 预览示例\]\(images/glsl-preview.png\)
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+---
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+## Requirements
 
-## For more information
+- Visual Studio Code 版本 `^1.95.0`
+- 必须安装 GLES 相关开发环境（如 OpenGL ES 运行时库）。
+- Android Studio （如果使用项目转换功能）。
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+---
 
-**Enjoy!**
+## Usage
+
+1. 打开一个 GLSL 文件（扩展名为 `.glsl`）。
+2. 在文件编辑器中右键，选择 **Run GLSL File**。
+3. 在 WebView 面板中查看 Shader 的实时渲染效果。
+
+---
+
+## Extension Settings
+
+此插件不需要额外的配置，所有功能可直接使用。
+
+---
+
+## Known Issues
+
+- 在低性能计算机上，复杂 Shader 的渲染可能较慢。
+- 某些 Shader 可能与 GLES 的特定版本不兼容。
+
+---
+
+## Release Notes
+
+### 0.0.1
+
+- 添加了基础的 GLSL 预览功能。
+- 支持 GLSL 文件的右键菜单操作。
+
+---
+
+## Contributing
+
+欢迎为此插件贡献代码或提出改进建议！请访问 [GitHub 仓库](https://github.com/your-repo-link) 提交 Issue 或 Pull Request。
+
+---
+
+## License
+
+Shader Bridge 遵循 [MIT License](https://opensource.org/licenses/MIT)。

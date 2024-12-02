@@ -9,9 +9,11 @@ export default class WebGLContext {
             throw new Error('WebGL not supported');
         }
 
-        this.fileList = JSON.parse(document.getElementById("fileList").textContent);
+        const shaderData = JSON.parse(document.getElementById("shaderData").textContent);
+
+        this.fileList = shaderData.fileInfos;
         console.log(this.fileList);
-        this.lineMapping = JSON.parse(document.getElementById("lineMapping").textContent);
+        this.lineMapping = shaderData.lineMappings;
         console.log(this.lineMapping);
 
         this.fragmentShaderSource = this.generateMergedGLSL();

@@ -43,6 +43,16 @@
 			"group": "build",
 			"problemMatcher": [],
 			"detail": "Runs the npm run package script to build the extension."
-		}
+		},
+		{
+            "label": "vsce: package",
+            "type": "shell",
+            "command": "npx vsce package",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
 	]
 }
