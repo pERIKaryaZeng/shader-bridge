@@ -46,7 +46,8 @@ export function deactivate() {}
 // 文件内容和路径的结构
 interface FileInfo {
     filePath: string; // 文件路径 (Base64)
-    fileContent: string; // 文件内容 (Base64)
+    webviewUri: string; // web view 修改后路径 (Base64)
+    fileContent: string;
 }
 
 // 行映射的结构
@@ -82,7 +83,7 @@ function removeComments(content: string): string {
 
 function parseGLSL(
     filePath: string,
-    fileInfos: FileInfo[],
+    fileMap: Map<string, number>,
     lineMappings: LineMapping[],
     processedFiles: Set<string>, // 用于跟踪已解析的文件路径
     iChannelFiles: Map<number, string>, // 用于跟踪 #ichannel 文件路径
@@ -96,15 +97,22 @@ function parseGLSL(
     // 标记当前文件为已处理
     processedFiles.add(filePath);
 
+    // 如果文件在全局中被添加过， 直接获取index
+    let fileIndex = fileMap.get(filePath);
+    if (!fileIndex){
+        fileIndex = fileMap.size;
+        fileMap.set(filePath, fileIndex);
+    }
+
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
-    const fileIndex = fileInfos.length;
 
-    // 添加当前文件到文件列表
-    fileInfos.push({
-        filePath: encodeBase64(filePath),
-        fileContent: encodeBase64(content),
-    });
+
+    // // 添加当前文件到文件列表
+    // fileInfos.push({
+    //     filePath: encodeBase64(filePath),
+    //     fileContent: encodeBase64(content),
+    // });
 
     let currentGlobalLine = startLine;
     for (let i = 0; i < lines.length; i++) {
@@ -117,7 +125,7 @@ function parseGLSL(
             const includePath = path.resolve(path.dirname(filePath), includeMatch[1]);
 
             // 递归解析 #include 文件，传递已处理文件集合
-            currentGlobalLine = parseGLSL(includePath, fileInfos, lineMappings, processedFiles, iChannelFiles, currentGlobalLine);
+            currentGlobalLine = parseGLSL(includePath, fileMap, lineMappings, processedFiles, iChannelFiles, currentGlobalLine);
             continue; // 如果是 #include 指令，处理完后继续下一行
         }
 
@@ -143,19 +151,26 @@ function parseGLSL(
     return currentGlobalLine - 1;
 }
 
-function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, shaderData: ShaderData) {
+function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, shaderData: ShaderData, fileMap: Map<string, number>) {
 
     const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "src", "html", " ")));
 
     try {
-        //let shaderData: ShaderData = {fileInfos: [], lineMappings: []};
-        //parseGLSL(filePath, shaderData, );
 
+        shaderData.fileInfos = Array.from(fileMap.keys(), (filePath, index) => {
 
-        // 获取所有文件的父目录并去重
-        // const uniqueDirectories = Array.from(
-        //     new Set(filePaths.map(filePath => path.dirname(filePath)))
-        // );
+            const content = fs.readFileSync(filePath, 'utf-8');
+    
+            const webviewUri = panel.webview.asWebviewUri(vscode.Uri.file(filePath));
+    
+            return {
+                filePath: encodeBase64(filePath), 
+                webviewUri: encodeBase64(webviewUri.toString()), 
+                fileContent: ""//encodeBase64(content)
+            };
+        });
+
+        console.log(shaderData)
 
         const htmlPath = path.join(context.extensionPath, 'src', 'html', 'glsl_viewer.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf-8');
@@ -173,20 +188,23 @@ function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.Extens
 
 function processChannel(
     filePath: string,
-    processedFiles: Set<string>,
+    fileMap: Map<string, number>,
     shaderData: ShaderData,
 ){
     console.log(`Process channels with file path: ${filePath}`);
     const iChannelFiles = new Map<number, string>();
     let renderPassInfo: RenderPassInfo = {lineMappings: []};
-    parseGLSL(filePath, shaderData.fileInfos, renderPassInfo.lineMappings, processedFiles, iChannelFiles);
+
+
+    const processedFiles = new Set<string>();
+    parseGLSL(filePath, fileMap, renderPassInfo.lineMappings, processedFiles, iChannelFiles);
     shaderData.renderPassInfos.push(renderPassInfo);
 
     for (const [channelNumber, channelFilePath] of iChannelFiles.entries()) {
         console.log(`Process channel: ${channelNumber}`);
 
         if (fs.existsSync(channelFilePath)){
-            processChannel(channelFilePath, processedFiles, shaderData);
+            processChannel(channelFilePath, fileMap, shaderData);
         } else {
             console.log(`Channel file not found: ${channelFilePath}`);
         }
@@ -195,85 +213,64 @@ function processChannel(
 }
 
 function showGLSLPreview(context: vscode.ExtensionContext, uri: vscode.Uri) {
+    const mainfilePath = uri.fsPath;
 
-    const filePath = uri.fsPath;
+    const fileMap = new Map<string, number>();
+    let shaderData: ShaderData = { fileInfos: [], renderPassInfos: [] };
+    processChannel(mainfilePath, fileMap, shaderData);
 
-    const processedFiles = new Set<string>();
-
-    let shaderData: ShaderData = {fileInfos: [], renderPassInfos: []};
-    processChannel(filePath, processedFiles, shaderData);
-
-
-    console.log(processedFiles)
-    console.log(shaderData)
-
-
+    console.log(fileMap);
 
     // 动态维护允许的资源路径列表
-    const dynamicRoots = new Set<string>();
-
+    const dynamicRoots = new Set(fileMap.keys());
 
     // 固定路径（用于各个源文件）
     dynamicRoots.add(path.join(context.extensionPath, "src"));
+    dynamicRoots.add('C:/Users/12791/Downloads/space');
 
-    // 动态更新资源路径
-    const addToLocalResourceRoots = (filePath: string) => {
-        const dir = path.dirname(filePath);
-        if (!dynamicRoots.has(dir)) {
-            dynamicRoots.add(dir);
+    console.log("Dynamic Roots: ", dynamicRoots);
 
-            // Update localResourceRoots if the panel exists
-            if (panel && panel.webview) {
-                panel.webview.options = {
-                    ...panel.webview.options,
-                    localResourceRoots: Array.from(dynamicRoots).map(root =>
-                        vscode.Uri.file(root)
-                    )
-                };
-            }
-        }
-    };
-
-    // 如果 Panel 已经存在，直接更新内容
+    // 如果 Panel 已经存在，关闭旧的 Panel
     if (panel) {
-        addToLocalResourceRoots(uri.fsPath); // 动态更新路径
-        updateWebviewContent(panel, context, shaderData); // 更新 Webview 内容
-        panel.reveal(vscode.ViewColumn.One); // 保持在同一个窗口内
-    } else {
-        // 如果 Panel 不存在，创建新的 WebviewPanel
-        const rootPath = path.dirname(uri.fsPath);
-        dynamicRoots.add(rootPath);
-
-        panel = vscode.window.createWebviewPanel(
-            'glslPreview',
-            'GLSL Preview',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                localResourceRoots: Array.from(dynamicRoots).map(root =>
-                    vscode.Uri.file(root)
-                )
-            }
-        );
-
-        panel.onDidDispose(() => {
-            panel = undefined; // Webview 被关闭时清空引用
-        });
-
-        panel.webview.onDidReceiveMessage((message) => {
-            if (message.command === 'openFile') {
-                const fileUri = vscode.Uri.file(message.filePath);
-                vscode.workspace.openTextDocument(fileUri).then((document) => {
-                    vscode.window.showTextDocument(document, {
-                        selection: new vscode.Range(
-                            new vscode.Position(message.lineNumber - 1, 0),
-                            new vscode.Position(message.lineNumber - 1, 0)
-                        ),
-                    });
-                });
-            }
-        });
-
-        updateWebviewContent(panel, context, shaderData);
+        panel.dispose(); // 关闭旧的 Panel
     }
+
+    // 创建新的 WebviewPanel
+    const rootPath = path.dirname(uri.fsPath);
+    dynamicRoots.add(rootPath);
+
+    panel = vscode.window.createWebviewPanel(
+        'glslPreview',
+        'GLSL Preview',
+        vscode.ViewColumn.One,
+        {
+            enableScripts: true,
+            localResourceRoots: Array.from(dynamicRoots).map(root =>
+                vscode.Uri.file(root)
+            ),
+        }
+    );
+
+    // 处理 Panel 被关闭的情况
+    panel.onDidDispose(() => {
+        panel = undefined; // Webview 被关闭时清空引用
+    });
+
+    // 处理消息事件
+    panel.webview.onDidReceiveMessage((message) => {
+        if (message.command === 'openFile') {
+            const fileUri = vscode.Uri.file(message.filePath);
+            vscode.workspace.openTextDocument(fileUri).then((document) => {
+                vscode.window.showTextDocument(document, {
+                    selection: new vscode.Range(
+                        new vscode.Position(message.lineNumber - 1, 0),
+                        new vscode.Position(message.lineNumber - 1, 0)
+                    ),
+                });
+            });
+        }
+    });
+
+    // 更新 Webview 内容
+    updateWebviewContent(panel, context, shaderData, fileMap);
 }
