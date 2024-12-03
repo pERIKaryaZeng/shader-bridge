@@ -1,16 +1,18 @@
 {
 	"compilerOptions": {
-		"module": "Node16",
-		"target": "ES2022",
-		"lib": [
-			"ES2022"
-		],
-		"sourceMap": true,
-		"rootDir": "src",
-		"strict": true   /* enable all strict type-checking options */
-		/* Additional Checks */
-		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
-	}
-}
+	  "module": "Node16",
+	  "moduleResolution": "Node16",
+	  "target": "ES2022",
+	  "lib": ["ES2022", "DOM"],                  /* 添加 DOM 支持 */
+	  "sourceMap": true,
+	  "rootDir": "src",
+	  "strict": true,                           /* 开启所有严格模式检查 */
+	  "jsx": "react-jsx",                       /* 启用 React JSX 支持 */
+	  "types": ["node", "mocha", "react"],       /* 加载 Node.js、Jest 和 React 类型 */
+	  "esModuleInterop": true,                  /* 支持 CommonJS 和 ES 模块互操作 */
+	  "skipLibCheck": true,
+	  "allowJs": true,                   /* 跳过库文件的类型检查以加速编译 */
+	},
+	"include": ["src/**/*"],                    /* 包含 src 文件夹中的所有文件 */
+	"exclude": ["node_modules", "dist"]         /* 排除 node_modules 和 dist 文件夹 */
+  }

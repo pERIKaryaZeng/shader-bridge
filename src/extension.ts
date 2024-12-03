@@ -153,7 +153,7 @@ function parseGLSL(
 
 function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, shaderData: ShaderData, fileMap: Map<string, number>) {
 
-    const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "src", "html", " ")));
+    const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "dist", " ")));
 
     try {
 
@@ -172,7 +172,7 @@ function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.Extens
 
         console.log(shaderData)
 
-        const htmlPath = path.join(context.extensionPath, 'src', 'html', 'glsl_viewer.html');
+        const htmlPath = path.join(context.extensionPath, 'dist', 'gl_preview.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 
         // 将文件列表和行映射数据传递给 Webview
@@ -225,8 +225,7 @@ function showGLSLPreview(context: vscode.ExtensionContext, uri: vscode.Uri) {
     const dynamicRoots = new Set(fileMap.keys());
 
     // 固定路径（用于各个源文件）
-    dynamicRoots.add(path.join(context.extensionPath, "src"));
-    dynamicRoots.add('C:/Users/12791/Downloads/space');
+    dynamicRoots.add(path.join(context.extensionPath, 'dist'));
 
     console.log("Dynamic Roots: ", dynamicRoots);
 
