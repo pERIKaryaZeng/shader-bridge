@@ -78,15 +78,15 @@ export default class WebGLContext {
     public async loadAllFileContents(): Promise<void> {
         console.log("Starting to load all files...");
         const promises = this.fileList.map(async (fileInfo) => {
-            const webviewUri = this.decodeBase64(fileInfo.webviewUri);
-
+            fileInfo.webviewUri = this.decodeBase64(fileInfo.webviewUri);
+            fileInfo.filePath = this.decodeBase64(fileInfo.filePath);
+            const webviewUri = fileInfo.webviewUri;
             try {
                 const response = await fetch(webviewUri);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch ${webviewUri}: ${response.statusText}`);
                 }
-                const content = await response.text();
-                fileInfo.fileContent = this.encodeBase64(content); // 将文件内容重新编码为 Base64
+                fileInfo.fileContent = await response.text(); // 将文件内容重新编码为 Base64
                 console.log(`File loaded: ${webviewUri}`);
             } catch (error) {
                 console.error(`Error loading file: ${webviewUri}`, error);
@@ -114,7 +114,7 @@ export default class WebGLContext {
         return this.lineMapping
             .map(mapping => {
                 const file = this.fileList[mapping.fileIndex];
-                const content = this.decodeBase64(file.fileContent!);
+                const content = file.fileContent!;
                 const lines = content.split('\n');
                 return lines[mapping.localLine - 1];
             })
@@ -127,7 +127,7 @@ export default class WebGLContext {
             const mapping = this.lineMapping[globalLine - 1];
             const fileInfo = this.fileList[mapping.fileIndex];
             return {
-                filePath: this.decodeBase64(fileInfo.filePath),
+                filePath: fileInfo.filePath,
                 localLine: mapping.localLine,
             };
         }
