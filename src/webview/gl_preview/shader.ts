@@ -1,15 +1,30 @@
-import WebGLContext from './web_gl_context';
+import {WebGLContext, LineMapping} from './web_gl_context';
+
+interface FileAndLineInfo {
+    filePath: string;
+    localLine: number;
+}
 
 export default class Shader {
     private gl: WebGLRenderingContext;
+    private webglContext: WebGLContext;
     private shader: WebGLShader;
+    private lineMappings!: LineMapping[];
 
     constructor(
-        private webglContext: WebGLContext, // 假设 WebGLContext 是一个类型，包含 `gl` 和其他辅助方法
-        source: string,
-        type: number
+        private webGlContext: WebGLContext, // 假设 WebGLContext 是一个类型，包含 `gl` 和其他辅助方法
+        type: number,
+        source: string | null,
     ) {
-        this.gl = webglContext.get();
+        this.webglContext = webGlContext;
+        this.gl = webGlContext.get();
+
+        if (!source){
+            this.lineMappings = webGlContext.shaderData.renderPassInfos[0].lineMappings; //这个要给到每一个着色器
+            source = this.generateMergedGLSL();
+            console.log("Generated Fragment Shader Source:\n", source);
+        }
+
         this.shader = this.compileShader(source, type);
     }
 
@@ -32,7 +47,7 @@ export default class Shader {
             // 替换错误日志中的全局行号为源文件的行号和文件路径
             errorLineMatches.forEach(match => {
                 const globalLine = parseInt(match[1], 10);
-                const fileInfo = this.webglContext.findFileAndLine(globalLine);
+                const fileInfo = this.findFileAndLine(globalLine);
 
                 if (fileInfo) {
                     // 构造替换字符串
@@ -56,6 +71,31 @@ export default class Shader {
         }
 
         return shader;
+    }
+
+    // 合并 GLSL 文件内容
+    private generateMergedGLSL(): string {
+        return this.lineMappings
+            .map(mapping => {
+                const file = this.webglContext.shaderData.fileInfos[mapping.fileIndex];
+                const content = file.fileContent!;
+                const lines = content.split('\n');
+                return lines[mapping.localLine - 1];
+            })
+            .join('\n');
+    }
+
+    // 根据全局行号查找文件路径和本地行号
+    public findFileAndLine(globalLine: number): FileAndLineInfo | null {
+        if (globalLine > 0 && globalLine <= this.lineMappings.length) {
+            const mapping = this.lineMappings[globalLine - 1];
+            const fileInfo = this.webglContext.shaderData.fileInfos[mapping.fileIndex];
+            return {
+                filePath: fileInfo.filePath,
+                localLine: mapping.localLine,
+            };
+        }
+        return null;
     }
 
     public get(): WebGLShader {
