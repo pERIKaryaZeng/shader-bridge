@@ -1,6 +1,6 @@
 {
   "name": "shader-bridge",
-  "displayName": "Shader Bridge",
+  "displayName": "Hue Weaver",
   "description": "A VSCode plugin designed for displaying GLES code with built-in support to preview GLES shader results. Additionally, the plugin provides a command to convert the current project into an Android Studio project, enabling seamless development for Android platforms.",
   "version": "0.0.1",
   "engines": {
@@ -18,11 +18,11 @@
     "commands": [
       {
         "command": "shader-bridge.runGLSL",
-        "title": "Run GLSL File"
+        "title": "Hue Weaver: Run GLSL File"
       },
       {
         "command": "shader-bridge.saveAndRunGLSL",
-        "title": "Save and Run GLSL File"
+        "title": "Hue Weaver: Save and Run GLSL File"
       }
     ],
     "menus": {

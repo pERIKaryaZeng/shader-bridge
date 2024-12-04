@@ -90,10 +90,10 @@ const glPreviewConfig = {
   target: 'web', // Target for Webview front-end code
   mode: 'none',
 
-  entry: './src/webview/gl_preview/gl_preview.tsx', // Entry point for Webview front-end (JS file)
+  entry: './src/webview/gl_preview/gl_preview.ts', // Entry point for Webview front-end (JS file)
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'gl_preview.tsx',
+    filename: 'gl_preview.js',
     libraryTarget: 'umd', // Universal Module Definition for compatibility
   },
   resolve: {
@@ -117,11 +117,6 @@ const glPreviewConfig = {
     ]
   },
   devtool: 'source-map', // Enable source maps for debugging in Webview
-
-
-
-
-
 
   plugins: [
     new CopyWebpackPlugin({

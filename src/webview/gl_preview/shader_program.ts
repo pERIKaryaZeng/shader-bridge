@@ -1,11 +1,20 @@
+import Shader from './shader';
+
 export default class ShaderProgram {
-    constructor(gl, vertexShader, fragmentShader) {
+    private gl: WebGLRenderingContext;
+    private program: WebGLProgram;
+
+    constructor(gl: WebGLRenderingContext, vertexShader: Shader, fragmentShader: Shader) {
         this.gl = gl;
         this.program = this.createProgram(vertexShader, fragmentShader);
     }
 
-    createProgram(vertexShader, fragmentShader) {
+    private createProgram(vertexShader: Shader, fragmentShader: Shader): WebGLProgram {
         const program = this.gl.createProgram();
+        if (!program) {
+            throw new Error("Failed to create WebGL program.");
+        }
+
         this.gl.attachShader(program, vertexShader.get());
         this.gl.attachShader(program, fragmentShader.get());
         this.gl.linkProgram(program);
@@ -19,16 +28,22 @@ export default class ShaderProgram {
         return program;
     }
 
-    use() {
+    public get(): WebGLProgram {
+        return this.program;
+    }
+
+    public use(): void {
         this.gl.useProgram(this.program);
     }
 
-    getUniformLocation(name) {
+    public getUniformLocation(name: string): WebGLUniformLocation | null {
         return this.gl.getUniformLocation(this.program, name);
     }
 
-    setUniform1f(name, value) {
+    public setUniform1f(name: string, value: number): void {
         const location = this.getUniformLocation(name);
-        this.gl.uniform1f(location, value);
+        if (location) {
+            this.gl.uniform1f(location, value);
+        }
     }
 }

@@ -1,4 +1,4 @@
-import Viewer from './viewer.js';
+import Viewer from './viewer';
 
 // 获取 VS Code API 类型（可选）
 declare function acquireVsCodeApi(): any;
