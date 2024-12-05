@@ -1,12 +1,12 @@
 import TextureSource from "./texture_source";
 
-export class FrameBuffer {
+export default class FrameBuffer {
     private gl: WebGLRenderingContext;
     private glFrameBuffer: WebGLFramebuffer | null;
     private glTextures: WebGLTexture[];
     private glRenderBuffer: WebGLRenderbuffer | null;
-    public width: number;
-    public height: number;
+    private width: number;
+    private height: number;
 
     constructor(gl: WebGLRenderingContext, width: number, height: number, outputs: number) {
         this.gl = gl;
@@ -25,6 +25,14 @@ export class FrameBuffer {
         this.glRenderBuffer = this.createRenderbuffer(width, height);
 
         this.attachResources(drawBuffersExtension, outputs);
+    }
+
+    public get(): WebGLFramebuffer | null{
+        return this.glFrameBuffer;
+    }
+
+    public getSize(): {width: number, height: number} {
+        return {width: this.width, height: this.height};
     }
 
     private createTextures(width: number, height: number, outputs: number): WebGLTexture[] {

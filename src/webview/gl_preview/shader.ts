@@ -8,24 +8,25 @@ interface FileAndLineInfo {
 export default class Shader {
     private gl: WebGLRenderingContext;
     private webglContext: WebGLContext;
-    private shader: WebGLShader;
+    private glShader: WebGLShader;
     private lineMappings!: LineMapping[];
 
     constructor(
         private webGlContext: WebGLContext, // 假设 WebGLContext 是一个类型，包含 `gl` 和其他辅助方法
         type: number,
+        lineMappings: LineMapping[],
         source: string | null,
     ) {
         this.webglContext = webGlContext;
         this.gl = webGlContext.get();
 
         if (!source){
-            this.lineMappings = webGlContext.shaderData.renderPassInfos[0].lineMappings; //这个要给到每一个着色器
+            this.lineMappings = lineMappings; //这个要给到每一个着色器
             source = this.generateMergedGLSL();
             console.log("Generated Fragment Shader Source:\n", source);
         }
 
-        this.shader = this.compileShader(source, type);
+        this.glShader = this.compileShader(source, type);
     }
 
     private compileShader(source: string, type: number): WebGLShader {
@@ -99,6 +100,6 @@ export default class Shader {
     }
 
     public get(): WebGLShader {
-        return this.shader;
+        return this.glShader;
     }
 }
