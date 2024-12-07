@@ -1,17 +1,25 @@
 import Pass from './pass';
 import ShaderProgram from './shader_program';
 import FrameBuffer from './frame_buffer';
+import TextureSource from './texture_source';
 
 export default class RenderPass implements Pass {
     private gl: WebGLRenderingContext;
     private program: WebGLProgram; // 使用原生 WebGLProgram 类型
+    private textureSources: TextureSource[];
     private positionBuffer: WebGLBuffer | null;
     private frameBuffer: FrameBuffer | null;
 
-    constructor(gl: WebGLRenderingContext, shaderProgram: ShaderProgram, frameBuffer: FrameBuffer | null = null) {
+    constructor(
+        gl: WebGLRenderingContext,
+        shaderProgram: ShaderProgram,
+        textureSources: TextureSource[],
+        frameBuffer: FrameBuffer | null = null
+    ) {
         this.gl = gl;
         this.program = shaderProgram.get();
         this.positionBuffer = null;
+        this.textureSources = textureSources;
         this.frameBuffer = frameBuffer;
     }
 

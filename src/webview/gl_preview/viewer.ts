@@ -1,9 +1,10 @@
-import {WebGLContext} from './web_gl_context';
+import WebGLContext from './web_gl_context';
 import ShaderProgram from './shader_program';
 import Shader from './shader';
 import RenderPass from './render_pass';
 import Pipeline from './pipeline';
 import FrameBuffer from './frame_buffer';
+import TextureSource from './texture_source';
 
 export default class Viewer {
     private pipeline!: Pipeline;
@@ -38,20 +39,21 @@ export default class Viewer {
         const passes: RenderPass[] = [];
         this.webglContext.shaderData.renderPassInfos.forEach((renderPassInfo, index, array) => {
 
-            const vertexShader = new Shader(this.webglContext, this.gl.VERTEX_SHADER, [], vertexShaderSource);
-            const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, renderPassInfo.lineMappings, null);
+            const vertexShader = new Shader(this.webglContext, this.gl.VERTEX_SHADER, vertexShaderSource);
+            const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, null, renderPassInfo);
     
             const shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
 
-
             // 初始化渲染器
             const isLast = index === array.length - 1;
-            if (isLast) {
-                passes.push(new RenderPass(this.gl, shaderProgram));
-            } else {
-                passes.push(new RenderPass(this.gl, shaderProgram, new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1)));
-            }
-    
+
+            const textureSources: TextureSource[] = [];
+
+            const outputFrameBuffer: FrameBuffer | null = isLast ?
+                null :
+                new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
+
+            passes.push(new RenderPass(this.gl, shaderProgram, textureSources, outputFrameBuffer));
         });
 
 

@@ -32,6 +32,24 @@
     <div id="shaderData" style="display: none;">{{SHADER_DATA}}</div>
     <canvas id="glCanvas"></canvas>
     <script type="module" src="gl_preview.js"></script>
+    <script>
+        function toggleDetails(event, filePath, lineNumber) {
+            event.preventDefault(); // 阻止默认行为
+            const detailsId = 'details-' + filePath + '-' + lineNumber;
+            const triangleId = 'triangle-' + filePath + '-' + lineNumber;
+            const details = document.getElementById(detailsId);
+            const triangle = document.getElementById(triangleId);
+            if (details) {
+                if (details.style.display === 'none' || !details.style.display) {
+                    details.style.display = 'block'; // 显示展开内容
+                    triangle.style.transform = 'rotate(90deg)'; // 三角形向下
+                } else {
+                    details.style.display = 'none'; // 隐藏内容
+                    triangle.style.transform = 'rotate(0deg)'; // 三角形向左
+                }
+            }
+        }
+    </script>
    
 </body>
 </html>

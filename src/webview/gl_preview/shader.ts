@@ -1,27 +1,35 @@
-import {WebGLContext, LineMapping} from './web_gl_context';
+import { stringify } from 'querystring';
+import WebGLContext from './web_gl_context';
+import {RenderPassInfo} from '../../vs_code/shader_data';
 
 interface FileAndLineInfo {
     filePath: string;
     localLine: number;
+    treeIndex: number;
 }
 
 export default class Shader {
     private gl: WebGLRenderingContext;
     private webglContext: WebGLContext;
     private glShader: WebGLShader;
-    private lineMappings!: LineMapping[];
+    private renderPassInfo!: RenderPassInfo;
 
     constructor(
         private webGlContext: WebGLContext, // 假设 WebGLContext 是一个类型，包含 `gl` 和其他辅助方法
         type: number,
-        lineMappings: LineMapping[],
         source: string | null,
+        renderPassInfo: RenderPassInfo = {
+            includeFileTree: [],
+            lineMappings: [],
+            stringsToCheck: {},
+            requiredRenderPasses: {},
+        }
     ) {
         this.webglContext = webGlContext;
         this.gl = webGlContext.get();
 
         if (!source){
-            this.lineMappings = lineMappings; //这个要给到每一个着色器
+            this.renderPassInfo = renderPassInfo; //这个要给到每一个着色器
             source = this.generateMergedGLSL();
             console.log("Generated Fragment Shader Source:\n", source);
         }
@@ -53,12 +61,42 @@ export default class Shader {
                 if (fileInfo) {
                     // 构造替换字符串
                     const originalLine = match[0]; // 原始错误信息中包含 "ERROR: ...:line"
-                    const replacement = `<span style="color: red; font-weight: bold;">ERROR</span>` +
+
+                    const treeNode = this.renderPassInfo.includeFileTree[fileInfo.treeIndex];
+
+                    let treeIndex = treeNode.parentTreeIndex;
+                    let parentIncludeLine = treeNode.parentIncludeLine;
+                    let pathString = ``;
+                    while (treeIndex >= 0){
+                        const currentTreeNode = this.renderPassInfo.includeFileTree[treeIndex];
+                        const currentfileInfo = this.webglContext.shaderData.fileInfos[currentTreeNode.fileIndex];
+
+                        pathString =
+                            `<a href="#" class="file-link" style="text-decoration: none;" data-file-path="${currentfileInfo.filePath}" data-line-number="${parentIncludeLine}">` +
+                                `<span style="color: white;"> include </span>` +
+                                `<span style="color: yellow; font-family: monospace;">${currentfileInfo.filePath}</span>` +
+                                `<span style="color: white;"> : </span>` +
+                                `<span style="color: #00ccff; font-weight: bold;">${parentIncludeLine}\n</span>` +
+                            `</a>` +
+                            pathString;
+
+                        treeIndex = currentTreeNode.parentTreeIndex;
+                        parentIncludeLine = treeNode.parentIncludeLine;
+                    }
+     
+                    const replacement = 
+                        `<a href="#" onclick="toggleDetails(event, '${fileInfo.treeIndex}', ${fileInfo.localLine})" style="text-decoration: none;">` +
+                            `<span id="triangle-${fileInfo.treeIndex}-${fileInfo.localLine}" style="color: white; display: inline-block; transform: rotate(0deg); transition: transform 0.2s; margin-right: 5px;">▶</span>` +
+                            `<span style="color: red; font-weight: bold;">ERROR</span>` +
+                        `</a>` +
+                        `<div id="details-${fileInfo.treeIndex}-${fileInfo.localLine}" style="display: none; margin-left: 20px; color: #ccc; font-family: monospace;">` +
+                            pathString +
+                        `</div>`+
                         `<span style="color: white;"> in </span>` +
-                        `<a href="#" class="file-link" data-file-path="${fileInfo.filePath}" data-line-number="${fileInfo.localLine}">` +
-                        `<span style="color: yellow; font-family: monospace;">${fileInfo.filePath}</span>` +
-                        `<span style="color: white;"> : </span>` +
-                        `<span style="color: #00ccff; font-weight: bold;">${fileInfo.localLine} </span>` +
+                        `<a href="#" class="file-link" style="text-decoration: none;" data-file-path="${fileInfo.filePath}" data-line-number="${fileInfo.localLine}">` +
+                            `<span style="color: yellow; font-family: monospace;">${fileInfo.filePath}</span>` +
+                            `<span style="color: white;"> : </span>` +
+                            `<span style="color: #00ccff; font-weight: bold;">${fileInfo.localLine} </span>` +
                         `</a>`;
 
                     // 替换错误日志中的全局行号为文件路径+本地行号
@@ -76,9 +114,10 @@ export default class Shader {
 
     // 合并 GLSL 文件内容
     private generateMergedGLSL(): string {
-        return this.lineMappings
+        return this.renderPassInfo.lineMappings
             .map(mapping => {
-                const file = this.webglContext.shaderData.fileInfos[mapping.fileIndex];
+                const treeNode = this.renderPassInfo.includeFileTree[mapping.treeIndex];
+                const file = this.webglContext.shaderData.fileInfos[treeNode.fileIndex];
                 const content = file.fileContent!;
                 const lines = content.split('\n');
                 return lines[mapping.localLine - 1];
@@ -88,12 +127,14 @@ export default class Shader {
 
     // 根据全局行号查找文件路径和本地行号
     public findFileAndLine(globalLine: number): FileAndLineInfo | null {
-        if (globalLine > 0 && globalLine <= this.lineMappings.length) {
-            const mapping = this.lineMappings[globalLine - 1];
-            const fileInfo = this.webglContext.shaderData.fileInfos[mapping.fileIndex];
+        if (globalLine > 0 && globalLine <= this.renderPassInfo.lineMappings.length) {
+            const mapping = this.renderPassInfo.lineMappings[globalLine - 1];
+            const treeNode = this.renderPassInfo.includeFileTree[mapping.treeIndex];
+            const fileInfo = this.webglContext.shaderData.fileInfos[treeNode.fileIndex];
             return {
                 filePath: fileInfo.filePath,
                 localLine: mapping.localLine,
+                treeIndex: mapping.treeIndex
             };
         }
         return null;

@@ -15,21 +15,13 @@ ShaderData{
         },
         ...
     ],
+
     renderPassInfos: [
         RenderPassInfo 1{
-            lineMappings:[
-                LineMapping 1{
-                    fileIndex: number,
-                    localLine: number,
-                },
-                LineMapping 2{
-                    fileIndex: number,
-                    localLine: number,
-                },
-                ...
-            ],
-        },
-        RenderPassInfo 2{
+            includeFileTree: {
+                fileIndex: number
+                parentTreeIndex: number
+            },
             lineMappings:[
                 LineMapping 1{
                     fileIndex: number,
@@ -42,6 +34,26 @@ ShaderData{
                 ...
             ],
             stringsToCheck:{ string 1: boolean } 
+            requiredRenderPasses: { [key: string]: number };
+        },
+        RenderPassInfo 2{
+            includeFileTree: {
+                fileIndex: number
+                parentTreeIndex: number
+            },
+            lineMappings:[
+                LineMapping 1{
+                    fileIndex: number,
+                    localLine: number,
+                },
+                LineMapping 2{
+                    fileIndex: number,
+                    localLine: number,
+                },
+                ...
+            ],
+            stringsToCheck:{ string 1: boolean } 
+            requiredRenderPasses: { [key: string]: number };
         },
         ...
     ]
@@ -57,13 +69,21 @@ export interface FileInfo {
 }
 
 export interface LineMapping {
-    fileIndex: number;
+    treeIndex: number;
     localLine: number;
 }
 
+export interface fileTreeNode {
+    fileIndex: number;
+    parentTreeIndex: number;
+    parentIncludeLine: number;
+}
+
 export interface RenderPassInfo {
+    includeFileTree: fileTreeNode[],
     lineMappings: LineMapping[];
     stringsToCheck: { [key: string]: boolean };
+    requiredRenderPasses: { [key: string]: number };
 }
 
 export interface ShaderData {

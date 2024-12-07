@@ -6,13 +6,24 @@ import { checkingRegex, checkingStrings, RenderPassInfo, ShaderData } from './sh
 export function processChannel(
     filePath: string,
     fileMap: Map<string, number>,
+    passMap: Map<string, number>,
     shaderData: ShaderData,
-){
+): number {  
+    // 获取该pass在全局文件列表中的index
+    let passIndex = passMap.get(filePath);
+    // 如果pass在全局中被添加过， 则跳过
+    if (passIndex != undefined){
+        return passIndex;
+    }
+
+        
     console.log(`Process channels with file path: ${filePath}`);
     const iChannelFiles = new Map<number, string>();
     let renderPassInfo: RenderPassInfo = {
+        includeFileTree: [],
         lineMappings: [],
-        stringsToCheck: { ...checkingStrings } // 使用解构进行浅拷贝
+        stringsToCheck: { ...checkingStrings }, // 使用解构进行浅拷贝
+        requiredRenderPasses: {},
     };
 
     // 处理该文件 (全部相关的#include 会被整合为一个文件，而全部的 #ichannel 会被找出进行额外计算）
@@ -30,13 +41,17 @@ export function processChannel(
         console.log(`Process channel: ${channelNumber}`);
         // 如果文件存在
         if (fs.existsSync(channelFilePath)){
-            processChannel(channelFilePath, fileMap, shaderData);
+            let currentPassIndex = processChannel(channelFilePath, fileMap, passMap, shaderData);
+            renderPassInfo.requiredRenderPasses[channelNumber] = currentPassIndex;
         } else {
             console.log(`Channel file not found: ${channelFilePath}`);
         }
     }
 
+    passIndex = passMap.size;
+    passMap.set(filePath, passIndex);
     shaderData.renderPassInfos.push(renderPassInfo);
+    return passIndex;
 
 }
 
@@ -46,7 +61,9 @@ function parseGLSL(
     renderPassInfo: RenderPassInfo,
     processedFiles: Set<string>, // 用于跟踪已解析的文件路径
     iChannelFiles: Map<number, string>, // 用于跟踪 #ichannel 文件路径
-    startLine = 1
+    startLine = 1,
+    parentTreeIndex: number = -1,
+    parentIncludeLine: number = -1
 ): number {
     // 如果文件已经被解析过，直接返回当前行号
     if (processedFiles.has(filePath)) {
@@ -59,10 +76,18 @@ function parseGLSL(
     // 获取该文件在全局文件列表中的index
     let fileIndex = fileMap.get(filePath);
     // 如果文件在全局中被添加过， 添加到全局再获取index
-    if (!fileIndex){
+    if (fileIndex == undefined){
         fileIndex = fileMap.size;
         fileMap.set(filePath, fileIndex);
     }
+
+    const treeIndex = renderPassInfo.includeFileTree.length;
+
+    renderPassInfo.includeFileTree.push({
+        fileIndex: fileIndex,
+        parentTreeIndex: parentTreeIndex,
+        parentIncludeLine: parentIncludeLine
+    });
 
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
@@ -85,7 +110,9 @@ function parseGLSL(
                 renderPassInfo,
                 processedFiles,
                 iChannelFiles,
-                currentGlobalLine
+                currentGlobalLine,
+                treeIndex,
+                i + 1
             );
             continue; // 如果是 #include 指令，处理完后继续下一行
         }
@@ -109,7 +136,7 @@ function parseGLSL(
 
         // 如果是普通行，添加到行映射
         renderPassInfo.lineMappings.push({
-            fileIndex,
+            treeIndex: treeIndex,
             localLine: i + 1, // 当前文件中的行号，从 1 开始
         });
 

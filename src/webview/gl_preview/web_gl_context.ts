@@ -1,22 +1,8 @@
-export interface FileInfo {
-    webviewUri: string;
-    filePath: string; // Base64 编码的文件路径
-    fileContent?: string; // 可选，加载后存储文件内容（Base64 编码）
-}
 
-export interface LineMapping {
-    fileIndex: number;
-    localLine: number;
-}
+import {ShaderData} from '../../vs_code/shader_data';
 
-export interface ShaderData {
-    fileInfos: FileInfo[];
-    renderPassInfos: {
-        lineMappings: LineMapping[];
-    }[];
-}
 
-export class WebGLContext {
+export default class WebGLContext {
     private gl!: WebGLRenderingContext; // WebGL 上下文
     public shaderData!: ShaderData;
     public fragmentShaderSource!: string; // 生成的片段着色器源码
