@@ -1,6 +1,6 @@
-import { stringify } from 'querystring';
 import WebGLContext from './web_gl_context';
-import {RenderPassInfo} from '../../vs_code/shader_data';
+import { RenderPassInfo } from '../../vs_code/shader_data';
+import { generateRandomId } from '../../vs_code/string_tools';
 
 interface FileAndLineInfo {
     filePath: string;
@@ -9,7 +9,7 @@ interface FileAndLineInfo {
 }
 
 export default class Shader {
-    private gl: WebGLRenderingContext;
+    private gl: WebGL2RenderingContext; // 改为 WebGL2RenderingContext
     private webglContext: WebGLContext;
     private glShader: WebGLShader;
     private renderPassInfo!: RenderPassInfo;
@@ -23,13 +23,14 @@ export default class Shader {
             lineMappings: [],
             stringsToCheck: {},
             requiredRenderPasses: {},
+            glslVersion: null,
         }
     ) {
         this.webglContext = webGlContext;
-        this.gl = webGlContext.get();
+        this.gl = webGlContext.get() as WebGL2RenderingContext; // 确保是 WebGL2 上下文
 
-        if (!source){
-            this.renderPassInfo = renderPassInfo; //这个要给到每一个着色器
+        if (!source) {
+            this.renderPassInfo = renderPassInfo; // 将 RenderPassInfo 传递到每个着色器
             source = this.generateMergedGLSL();
             console.log("Generated Fragment Shader Source:\n", source);
         }
@@ -54,7 +55,7 @@ export default class Shader {
             const errorLineMatches = [...errorLog.matchAll(/ERROR:\s*\d+:(\d+)/g)];
 
             // 替换错误日志中的全局行号为源文件的行号和文件路径
-            errorLineMatches.forEach(match => {
+            errorLineMatches.forEach((match) => {
                 const globalLine = parseInt(match[1], 10);
                 const fileInfo = this.findFileAndLine(globalLine);
 
@@ -67,36 +68,39 @@ export default class Shader {
                     let treeIndex = treeNode.parentTreeIndex;
                     let parentIncludeLine = treeNode.parentIncludeLine;
                     let pathString = ``;
-                    while (treeIndex >= 0){
+                    while (treeIndex >= 0) {
                         const currentTreeNode = this.renderPassInfo.includeFileTree[treeIndex];
-                        const currentfileInfo = this.webglContext.shaderData.fileInfos[currentTreeNode.fileIndex];
+                        const currentfileInfo =
+                            this.webglContext.shaderData.fileInfos[currentTreeNode.fileIndex];
 
                         pathString =
                             `<a href="#" class="file-link" style="text-decoration: none;" data-file-path="${currentfileInfo.filePath}" data-line-number="${parentIncludeLine}">` +
-                                `<span style="color: white;"> include </span>` +
-                                `<span style="color: yellow; font-family: monospace;">${currentfileInfo.filePath}</span>` +
-                                `<span style="color: white;"> : </span>` +
-                                `<span style="color: #00ccff; font-weight: bold;">${parentIncludeLine}\n</span>` +
+                            `<span style="color: white;"> include </span>` +
+                            `<span style="color: yellow; font-family: monospace;">${currentfileInfo.filePath}</span>` +
+                            `<span style="color: white;"> : </span>` +
+                            `<span style="color: #00ccff; font-weight: bold;">${parentIncludeLine}\n</span>` +
                             `</a>` +
                             pathString;
 
                         treeIndex = currentTreeNode.parentTreeIndex;
                         parentIncludeLine = treeNode.parentIncludeLine;
                     }
-     
-                    const replacement = 
-                        `<a href="#" onclick="toggleDetails(event, '${fileInfo.treeIndex}', ${fileInfo.localLine})" style="text-decoration: none;">` +
-                            `<span id="triangle-${fileInfo.treeIndex}-${fileInfo.localLine}" style="color: white; display: inline-block; transform: rotate(0deg); transition: transform 0.2s; margin-right: 5px;">▶</span>` +
-                            `<span style="color: red; font-weight: bold;">ERROR</span>` +
+
+                    const uniqueWebId = generateRandomId();
+
+                    const replacement =
+                        `<a href="#" onclick="toggleDetails(event, '${uniqueWebId}', ${fileInfo.localLine})" style="text-decoration: none;">` +
+                        `<span id="triangle-${uniqueWebId}-${fileInfo.localLine}" style="color: white; display: inline-block; transform: rotate(0deg); transition: transform 0.2s; margin-right: 5px;">▶</span>` +
+                        `<span style="color: red; font-weight: bold;">ERROR</span>` +
                         `</a>` +
-                        `<div id="details-${fileInfo.treeIndex}-${fileInfo.localLine}" style="display: none; margin-left: 20px; color: #ccc; font-family: monospace;">` +
-                            pathString +
-                        `</div>`+
+                        `<div id="details-${uniqueWebId}-${fileInfo.localLine}" style="display: none; margin-left: 20px; color: #ccc; font-family: monospace;">` +
+                        pathString +
+                        `</div>` +
                         `<span style="color: white;"> in </span>` +
                         `<a href="#" class="file-link" style="text-decoration: none;" data-file-path="${fileInfo.filePath}" data-line-number="${fileInfo.localLine}">` +
-                            `<span style="color: yellow; font-family: monospace;">${fileInfo.filePath}</span>` +
-                            `<span style="color: white;"> : </span>` +
-                            `<span style="color: #00ccff; font-weight: bold;">${fileInfo.localLine} </span>` +
+                        `<span style="color: yellow; font-family: monospace;">${fileInfo.filePath}</span>` +
+                        `<span style="color: white;"> : </span>` +
+                        `<span style="color: #00ccff; font-weight: bold;">${fileInfo.localLine} </span>` +
                         `</a>`;
 
                     // 替换错误日志中的全局行号为文件路径+本地行号
@@ -115,12 +119,17 @@ export default class Shader {
     // 合并 GLSL 文件内容
     private generateMergedGLSL(): string {
         return this.renderPassInfo.lineMappings
-            .map(mapping => {
-                const treeNode = this.renderPassInfo.includeFileTree[mapping.treeIndex];
-                const file = this.webglContext.shaderData.fileInfos[treeNode.fileIndex];
-                const content = file.fileContent!;
-                const lines = content.split('\n');
-                return lines[mapping.localLine - 1];
+            .map((mapping) => {
+                // 如果不是特殊类型，则从文件内容中获取行内容
+                if (mapping.type == undefined) {
+                    const treeNode = this.renderPassInfo.includeFileTree[mapping.treeIndex];
+                    const file = this.webglContext.shaderData.fileInfos[treeNode.fileIndex];
+                    const content = file.fileContent!;
+                    const lines = content.split('\n');
+                    return lines[mapping.localLine - 1];
+                } else if (mapping.type == 'replace') {
+                    return mapping.replaceContent;
+                }
             })
             .join('\n');
     }
@@ -134,7 +143,7 @@ export default class Shader {
             return {
                 filePath: fileInfo.filePath,
                 localLine: mapping.localLine,
-                treeIndex: mapping.treeIndex
+                treeIndex: mapping.treeIndex,
             };
         }
         return null;

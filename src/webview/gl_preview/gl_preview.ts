@@ -5,6 +5,7 @@ declare function acquireVsCodeApi(): any;
 
 (async () => {
     try {
+        
         // 从 WebView 环境中获取 VS Code API
         const vscode = acquireVsCodeApi();
 

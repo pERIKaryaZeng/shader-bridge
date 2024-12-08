@@ -1,9 +1,7 @@
-
-import {ShaderData} from '../../vs_code/shader_data';
-
+import { ShaderData } from '../../vs_code/shader_data';
 
 export default class WebGLContext {
-    private gl!: WebGLRenderingContext; // WebGL 上下文
+    private gl!: WebGL2RenderingContext; // 使用 WebGL2RenderingContext
     public shaderData!: ShaderData;
     public fragmentShaderSource!: string; // 生成的片段着色器源码
 
@@ -17,16 +15,17 @@ export default class WebGLContext {
     }
 
     private async initialize(canvasId: string): Promise<void> {
-        // 初始化 Canvas 和 WebGL 上下文
+        // 初始化 Canvas 和 WebGL2 上下文
         const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
         if (!canvas) {
             throw new Error(`Canvas with ID "${canvasId}" not found`);
         }
-        this.gl = canvas.getContext('webgl')!;
-        if (!this.gl) {
-            throw new Error('WebGL not supported');
-        }
 
+        this.gl = canvas.getContext('webgl2') as WebGL2RenderingContext; // 确保使用 WebGL2
+        if (!this.gl) {
+            throw new Error('WebGL 2.0 is not supported');
+        }
+        
         // 加载所有文件内容，并等待完成
         try {
             await this.loadAllFileContents();
@@ -74,7 +73,7 @@ export default class WebGLContext {
         return atob(encoded);
     }
 
-    public get(): WebGLRenderingContext {
+    public get(): WebGL2RenderingContext {
         return this.gl;
     }
 }

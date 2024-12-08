@@ -1,22 +1,17 @@
-import TextureSource from "./texture_source";
+import { TextureSource } from "./texture_source";
 
 export default class FrameBuffer {
-    private gl: WebGLRenderingContext;
+    private gl: WebGL2RenderingContext; // 更新为 WebGL2RenderingContext
     private glFrameBuffer: WebGLFramebuffer | null;
     private glTextures: WebGLTexture[];
     private glRenderBuffer: WebGLRenderbuffer | null;
     private width: number;
     private height: number;
 
-    constructor(gl: WebGLRenderingContext, width: number, height: number, outputs: number) {
+    constructor(gl: WebGL2RenderingContext, width: number, height: number, outputs: number) {
         this.gl = gl;
         this.width = width;
         this.height = height;
-
-        const drawBuffersExtension = gl.getExtension("WEBGL_draw_buffers");
-        if (!drawBuffersExtension) {
-            throw new Error("WEBGL_draw_buffers not supported in this context");
-        }
 
         this.glFrameBuffer = gl.createFramebuffer();
         if (!this.glFrameBuffer) throw new Error("Failed to create framebuffer");
@@ -24,15 +19,15 @@ export default class FrameBuffer {
         this.glTextures = this.createTextures(width, height, outputs);
         this.glRenderBuffer = this.createRenderbuffer(width, height);
 
-        this.attachResources(drawBuffersExtension, outputs);
+        this.attachResources(outputs);
     }
 
-    public get(): WebGLFramebuffer | null{
+    public get(): WebGLFramebuffer | null {
         return this.glFrameBuffer;
     }
 
-    public getSize(): {width: number, height: number} {
-        return {width: this.width, height: this.height};
+    public getSize(): { width: number; height: number } {
+        return { width: this.width, height: this.height };
     }
 
     private createTextures(width: number, height: number, outputs: number): WebGLTexture[] {
@@ -42,17 +37,11 @@ export default class FrameBuffer {
             if (!texture) throw new Error(`Failed to create texture for output ${i}`);
 
             this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
-            this.gl.texImage2D(
-                this.gl.TEXTURE_2D,
-                0,
-                this.gl.RGBA,
-                width,
-                height,
-                0,
-                this.gl.RGBA,
-                this.gl.UNSIGNED_BYTE,
-                null
-            );
+
+            // 使用 texStorage2D 提高性能
+            this.gl.texStorage2D(this.gl.TEXTURE_2D, 1, this.gl.RGBA8, width, height);
+
+            // 设置纹理参数
             this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
             this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
             this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
@@ -72,7 +61,7 @@ export default class FrameBuffer {
         return renderbuffer;
     }
 
-    private attachResources(drawBuffersExtension: any, outputs: number): void {
+    private attachResources(outputs: number): void {
         if (!this.glFrameBuffer) throw new Error("Failed to create frameBuffer");
 
         const gl = this.gl;
@@ -91,10 +80,10 @@ export default class FrameBuffer {
             drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
         }
 
-        // Set the draw buffers for the framebuffer
-        drawBuffersExtension.drawBuffersWEBGL(drawBuffers);
+        // 使用 WebGL 2.0 的内置 drawBuffers
+        gl.drawBuffers(drawBuffers);
 
-        // Attach renderbuffer for depth (optional)
+        // 可选：为深度缓冲区附加 renderbuffer
         if (this.glRenderBuffer) {
             gl.framebufferRenderbuffer(
                 gl.FRAMEBUFFER,
@@ -104,13 +93,13 @@ export default class FrameBuffer {
             );
         }
 
-        // Check framebuffer completeness
+        // 检查帧缓冲区完整性
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         if (status !== gl.FRAMEBUFFER_COMPLETE) {
             throw new Error(`Framebuffer is incomplete: ${status.toString(16)}`);
         }
 
-        // Unbind framebuffer
+        // 解绑帧缓冲区
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
@@ -145,7 +134,6 @@ export default class FrameBuffer {
         this.glRenderBuffer = null;
     }
 }
-
 
 export class FrameBufferTextureReference implements TextureSource {
     private frameBuffer: FrameBuffer;

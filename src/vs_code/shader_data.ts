@@ -18,17 +18,20 @@ ShaderData{
 
     renderPassInfos: [
         RenderPassInfo 1{
-            includeFileTree: {
-                fileIndex: number
-                parentTreeIndex: number
-            },
+            includeFileTree: [
+                {
+                    fileIndex: number
+                    parentTreeIndex: number
+                },
+                ...
+            ]
             lineMappings:[
                 LineMapping 1{
-                    fileIndex: number,
+                    treeIndex: number,
                     localLine: number,
                 },
                 LineMapping 2{
-                    fileIndex: number,
+                    treeIndex: number,
                     localLine: number,
                 },
                 ...
@@ -37,10 +40,13 @@ ShaderData{
             requiredRenderPasses: { [key: string]: number };
         },
         RenderPassInfo 2{
-            includeFileTree: {
-                fileIndex: number
-                parentTreeIndex: number
-            },
+            includeFileTree: [
+                {
+                    fileIndex: number
+                    parentTreeIndex: number
+                },
+                ...
+            ]
             lineMappings:[
                 LineMapping 1{
                     fileIndex: number,
@@ -71,6 +77,8 @@ export interface FileInfo {
 export interface LineMapping {
     treeIndex: number;
     localLine: number;
+    type?: string;
+    replaceContent?: string;
 }
 
 export interface fileTreeNode {
@@ -84,6 +92,7 @@ export interface RenderPassInfo {
     lineMappings: LineMapping[];
     stringsToCheck: { [key: string]: boolean };
     requiredRenderPasses: { [key: string]: number };
+    glslVersion: string | null;
 }
 
 export interface ShaderData {

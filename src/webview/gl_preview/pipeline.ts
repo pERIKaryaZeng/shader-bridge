@@ -1,11 +1,10 @@
 import Pass from './pass';
 
-
 export default class Pipeline {
-    private gl: WebGLRenderingContext; // WebGL上下文
-    private passes: Pass[] = []; // 存储所有的RenderPass实例
+    private gl: WebGL2RenderingContext; // 更新为 WebGL2RenderingContext
+    private passes: Pass[] = []; // 存储所有的 RenderPass 实例
 
-    constructor(gl: WebGLRenderingContext, passes: Pass[]) {
+    constructor(gl: WebGL2RenderingContext, passes: Pass[]) {
         this.gl = gl;
         this.passes = passes;
 
