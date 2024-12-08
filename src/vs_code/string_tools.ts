@@ -30,3 +30,10 @@ export function removeComments(content: string): string {
 export function generateRandomId(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
+
+export function jsonDeepCopy<T>(object: T): T {
+    if (object === null || typeof object !== 'object') {
+        throw new Error('Invalid input: jsonDeepCopy expects an object or array');
+    }
+    return JSON.parse(JSON.stringify(object));
+}

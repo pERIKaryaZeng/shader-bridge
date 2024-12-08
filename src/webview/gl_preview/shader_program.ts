@@ -39,11 +39,4 @@ export default class ShaderProgram {
     public getUniformLocation(name: string): WebGLUniformLocation | null {
         return this.gl.getUniformLocation(this.program, name);
     }
-
-    public setUniform1f(name: string, value: number): void {
-        const location = this.getUniformLocation(name);
-        if (location) {
-            this.gl.uniform1f(location, value);
-        }
-    }
 }

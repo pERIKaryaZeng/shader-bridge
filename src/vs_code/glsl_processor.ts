@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { removeComments } from './string_tools';
-import { checkingRegex, checkingStrings, RenderPassInfo, ShaderData } from './shader_data';
+import { removeComments, jsonDeepCopy } from './string_tools';
+import { checkingRegex, checkingStrings, RenderPassInfo, ShaderData, LineMapping } from './shader_data';
 
 export function processChannel(
     filePath: string,
@@ -22,9 +22,11 @@ export function processChannel(
     let renderPassInfo: RenderPassInfo = {
         includeFileTree: [],
         lineMappings: [],
-        stringsToCheck: { ...checkingStrings }, // 使用解构进行浅拷贝
+        stringsToCheck: jsonDeepCopy(checkingStrings), // 使用json进行深拷贝
         requiredRenderPasses: {},
-        glslVersion: null
+        glslVersionInfo: null,
+        precisionFloatInfo: null,
+        precisionIntInfo: null
     };
 
     // 处理该文件 (全部相关的#include 会被整合为一个文件，而全部的 #ichannel 会被找出进行额外计算）
@@ -36,6 +38,74 @@ export function processChannel(
         processedFiles,
         iChannelFiles
     );
+
+    const insertLineMappings: LineMapping[] = [];
+
+    // 如果未找到版本号， 默认版本号为 300 es
+    if (renderPassInfo.glslVersionInfo == null){
+        renderPassInfo.glslVersionInfo = {
+            version: "300 es",
+            lingMapping: {
+                treeIndex: 0,
+                localLine: -1
+            }
+        };
+    }
+    insertLineMappings.push({
+        treeIndex: renderPassInfo.glslVersionInfo.lingMapping.treeIndex,
+        localLine: renderPassInfo.glslVersionInfo.lingMapping.localLine,
+        type: "replace",
+        replaceContent: `#version ${renderPassInfo.glslVersionInfo.version}`,
+    });
+
+    // 如果未找到 int 精度， 默认为 highp
+    if (renderPassInfo.precisionIntInfo == null){
+        renderPassInfo.precisionIntInfo = {
+            precision: "highp",
+            lingMapping: {
+                treeIndex: 0,
+                localLine: -1
+            }
+        };
+    }
+    insertLineMappings.push({
+        treeIndex: renderPassInfo.precisionIntInfo.lingMapping.treeIndex,
+        localLine: renderPassInfo.precisionIntInfo.lingMapping.localLine,
+        type: "replace",
+        replaceContent: `precision ${renderPassInfo.precisionIntInfo.precision} int;`,
+    });
+
+    // 如果未找到 float 精度， 默认为 highp
+    if (renderPassInfo.precisionFloatInfo == null){
+        renderPassInfo.precisionFloatInfo = {
+            precision: "highp",
+            lingMapping: {
+                treeIndex: 0,
+                localLine: -1
+            }
+        };
+    }
+    insertLineMappings.push({
+        treeIndex: renderPassInfo.precisionFloatInfo.lingMapping.treeIndex,
+        localLine: renderPassInfo.precisionFloatInfo.lingMapping.localLine,
+        type: "replace",
+        replaceContent: `precision ${renderPassInfo.precisionFloatInfo.precision} float;`,
+    });
+
+    // 如果找到 string， 启用 uniform
+    Object.entries(renderPassInfo.stringsToCheck).forEach(([string, stringInfo]) => {
+        if (!stringInfo.active) return;
+
+        insertLineMappings.push({
+            treeIndex: 0,
+            localLine: -1,
+            type: "replace",
+            replaceContent: `uniform ${stringInfo.type} ${string};`,
+        });
+    });
+
+    renderPassInfo.lineMappings.unshift(...insertLineMappings);
+
 
     // 处理从上面获取的每一个 #ichannel
     for (const [uniformName, channelFilePath] of iChannelFiles.entries()) {
@@ -103,7 +173,7 @@ function parseGLSL(
         // 检查 #version 指令
         const versionMatch = line.match(/^#version\s+(\d+)(\s+es)?/);
         if (versionMatch) {
-            if (!renderPassInfo.glslVersion){
+            if (!renderPassInfo.glslVersionInfo){
                 const versionNumber = versionMatch[1]; // 提取版本号
                 const isES = !!versionMatch[2]; // 检查是否是 ES 版本
     
@@ -113,18 +183,56 @@ function parseGLSL(
                     `Found #version directive in file: ${filePath}, Line: ${i + 1}, Version: ${versionString}`
                 );
     
-                renderPassInfo.glslVersion = versionString;
-
-                renderPassInfo.lineMappings.push({
-                    treeIndex: treeIndex,
-                    localLine: i + 1,
-                    type: "replace",
-                    replaceContent: `#version ${versionString}`
-                });
+                renderPassInfo.glslVersionInfo = {
+                    version: versionString,
+                    lingMapping: {
+                        treeIndex: treeIndex,
+                        localLine: i + 1
+                    }
+                };
             }
             continue;
         }
-    
+
+        // 匹配 precision 指令
+        const precisionMatch = line.match(/precision\s+(lowp|mediump|highp)\s+(float|int)\s*;/);
+        if (precisionMatch) {
+            const precisionLevel = precisionMatch[1]; // lowp, mediump, or highp
+            const dataType = precisionMatch[2]; // float or int
+
+            if (dataType == "int"){
+                if (!renderPassInfo.precisionIntInfo){
+                    console.log(
+                        `Found precision directive in file: ${filePath}, Line: ${i + 1}, Precision: ${precisionLevel}, Type: int`
+                    );
+
+                    renderPassInfo.precisionIntInfo = {
+                        precision: precisionLevel,
+                        lingMapping: {
+                            treeIndex: treeIndex,
+                            localLine: i + 1
+                        }
+                    };
+                }
+            }else if (dataType == "float"){
+                if (!renderPassInfo.precisionFloatInfo){
+                    console.log(
+                        `Found precision directive in file: ${filePath}, Line: ${i + 1}, Precision: ${precisionLevel}, Type: float`
+                    );
+
+                    renderPassInfo.precisionFloatInfo = {
+                        precision: precisionLevel,
+                        lingMapping: {
+                            treeIndex: treeIndex,
+                            localLine: i + 1
+                        }
+                    };
+                }
+            }
+
+            continue;
+        }
+
         // 优先匹配 #include 指令
         const includeMatch = line.match(/#include\s+["'](.+?)["']/);
         if (includeMatch) {
@@ -162,10 +270,11 @@ function parseGLSL(
             continue; // 处理完后直接跳到下一行
         }
 
+        // 对存在变量的查询
         const matches = line.match(checkingRegex);
         if (matches) {
             for (const match of matches) {
-                renderPassInfo.stringsToCheck[match] = true;
+                renderPassInfo.stringsToCheck[match].active = true;
             }
         }
 

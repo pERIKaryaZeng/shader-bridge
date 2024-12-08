@@ -23,7 +23,9 @@ export default class Shader {
             lineMappings: [],
             stringsToCheck: {},
             requiredRenderPasses: {},
-            glslVersion: null,
+            glslVersionInfo: null,
+            precisionFloatInfo: null,
+            precisionIntInfo: null
         }
     ) {
         this.webglContext = webGlContext;

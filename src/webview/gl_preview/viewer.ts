@@ -45,11 +45,10 @@ export default class Viewer {
 
             const shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
 
-            // 初始化渲染器
-            const isLast = index === array.length - 1;
 
             const textureSourceInfos: (TextureSourceInfo | null)[] = [];
 
+            // 获取所有需要的渲染纹理
             for (const [uniformName, passesIndex] of Object.entries(renderPassInfo.requiredRenderPasses)) {
                 const currentFrameBuffer = frameBuffers[passesIndex];
                 const textureSourceInfo = currentFrameBuffer ?
@@ -61,13 +60,16 @@ export default class Viewer {
                 textureSourceInfos.push(textureSourceInfo);
             }
 
-            const frameBuffer: FrameBuffer | null = isLast
-                ? null
-                : new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
+            // 初始化渲染器
+            const isLast = index === array.length - 1;
+
+            const frameBuffer: FrameBuffer | null = isLast ?
+                null :
+                new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
 
             frameBuffers.push(frameBuffer);
 
-            passes.push(new RenderPass(this.gl, shaderProgram, textureSourceInfos, frameBuffer));
+            passes.push(new RenderPass(this.gl, shaderProgram, textureSourceInfos, frameBuffer, renderPassInfo));
         });
 
         // 初始化渲染管线

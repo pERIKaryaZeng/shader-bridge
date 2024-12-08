@@ -90,9 +90,11 @@ export interface fileTreeNode {
 export interface RenderPassInfo {
     includeFileTree: fileTreeNode[],
     lineMappings: LineMapping[];
-    stringsToCheck: { [key: string]: boolean };
+    stringsToCheck: CheckingStrings;
     requiredRenderPasses: { [key: string]: number };
-    glslVersion: string | null;
+    glslVersionInfo: {version:string, lingMapping: LineMapping} | null;
+    precisionFloatInfo: {precision:string, lingMapping: LineMapping} | null;
+    precisionIntInfo: {precision:string, lingMapping: LineMapping} | null;
 }
 
 export interface ShaderData {
@@ -100,17 +102,25 @@ export interface ShaderData {
     renderPassInfos: RenderPassInfo[];
 }
 
-export const checkingStrings = Object.fromEntries(
-    [
-        // "gl_Position",
-        // "gl_FragColor",
-        // "gl_FragCoord",
-        "iTime",
-        "iResolution",
-        "iTimeDelta",
-        "iMouse",
-    ].map(key => [key, false])
-);
+// export const checkingStrings = Object.fromEntries(
+//     [
+//         "gl_FragColor",
+//         "iTime",
+//         "iResolution",
+//         "iTimeDelta",
+//         "iMouse",
+//     ].map(key => [key, false])
+// );
+
+export interface CheckingStrings {[key: string]: {active: boolean, type: string}}
+
+export const checkingStrings: CheckingStrings = {
+    "gl_FragColor": {active: false, type: "vec2"},
+    "iResolution": {active: false, type: "vec2"},
+    "iTime": {active: false, type: "float"},
+    "iTimeDelta": {active: false, type: "float"},
+    "iMouse": {active: false, type: "vec4"},
+}
 
 // 构造正则表达式，仅匹配未找到的字符串
 export const checkingRegex = new RegExp(
