@@ -3,6 +3,7 @@ import ShaderProgram from './shader_program';
 import FrameBuffer from './frame_buffer';
 import {TextureSourceInfo} from './texture_source';
 import { RenderPassInfo } from '../../vs_code/shader_data';
+import FrameState from './frame_state';
 
 export default class RenderPass implements Pass {
     private gl: WebGL2RenderingContext;
@@ -104,7 +105,7 @@ export default class RenderPass implements Pass {
         });
     }
 
-    public update(dt: number): void {
+    public update(frameState: FrameState): void {
         const gl = this.gl;
 
         let size: { width: number; height: number };
@@ -123,9 +124,9 @@ export default class RenderPass implements Pass {
         gl.useProgram(this.shaderProgram.get());
 
         gl.uniform2f(this.uniformInfos.iResolution, size.width, size.height);
-        gl.uniform1f(this.uniformInfos.iTime, 0.0);
-        gl.uniform1f(this.uniformInfos.iTimeDelta, dt);
-        gl.uniform4f(this.uniformInfos.iMouse, 0.0, 0.0, 0.0, 0.0);
+        gl.uniform1f(this.uniformInfos.iTime, frameState.time);
+        gl.uniform1f(this.uniformInfos.iTimeDelta, frameState.timeDelta);
+        gl.uniform4f(this.uniformInfos.iMouse, frameState.mouse.x, frameState.mouse.y, 0.0, 0.0);
 
         gl.bindVertexArray(this.vao);
         gl.drawArrays(gl.TRIANGLES, 0, 6);

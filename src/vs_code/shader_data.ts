@@ -66,8 +66,6 @@ ShaderData{
 }
 */
 
-
-
 export interface FileInfo {
     filePath: string;
     webviewUri: string;
@@ -101,16 +99,6 @@ export interface ShaderData {
     fileInfos: FileInfo[];
     renderPassInfos: RenderPassInfo[];
 }
-
-// export const checkingStrings = Object.fromEntries(
-//     [
-//         "gl_FragColor",
-//         "iTime",
-//         "iResolution",
-//         "iTimeDelta",
-//         "iMouse",
-//     ].map(key => [key, false])
-// );
 
 export interface CheckingStrings {[key: string]: {active: boolean, type: string}}
 

@@ -88,7 +88,14 @@ export default class Viewer {
         this.startTime = timestamp;
 
         this.currentTime += deltaTime;
-        this.pipeline.update(deltaTime);
+        this.pipeline.update({
+            time: this.currentTime,
+            timeDelta: deltaTime,
+            mouse:{
+                x: 0,
+                y: 0
+            }
+        });
         requestAnimationFrame((ts) => this.loop(ts));
     }
 

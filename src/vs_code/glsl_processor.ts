@@ -106,7 +106,6 @@ export function processChannel(
 
     renderPassInfo.lineMappings.unshift(...insertLineMappings);
 
-
     // 处理从上面获取的每一个 #ichannel
     for (const [uniformName, channelFilePath] of iChannelFiles.entries()) {
         console.log(`Process channel: ${uniformName}`);
