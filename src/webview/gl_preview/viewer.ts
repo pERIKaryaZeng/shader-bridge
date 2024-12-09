@@ -5,6 +5,7 @@ import RenderPass from './render_pass';
 import Pipeline from './pipeline';
 import FrameBuffer from './frame_buffer';
 import { TextureSourceInfo } from './texture_source';
+import Texture from './texture';
 
 export default class Viewer {
     private pipeline!: Pipeline;
@@ -13,15 +14,17 @@ export default class Viewer {
     private currentTime: number = 0;
     private startTime: number | null = null;
     private initializationPromise: Promise<void>;
+    private frameBuffers: (FrameBuffer | null)[];
 
     constructor(canvasId: string) {
+        this.frameBuffers = [];
         this.initializationPromise = this.initialize(canvasId);
     }
 
     private async initialize(canvasId: string): Promise<void> {
         // 初始化 WebGL 上下文
         try {
-            this.webglContext = await WebGLContext.create(canvasId); // 明确要求 WebGL2
+            this.webglContext = await WebGLContext.create(canvasId, this);
             this.gl = this.webglContext.get() as WebGL2RenderingContext; // 确保为 WebGL2 上下文
             console.log("WebGL 2.0 context initialized:", this.gl);
         } catch (error) {
@@ -38,7 +41,6 @@ export default class Viewer {
             }`;
 
         const passes: RenderPass[] = [];
-        const frameBuffers: (FrameBuffer | null)[] = [];
         this.webglContext.shaderData.renderPassInfos.forEach((renderPassInfo, index, array) => {
             const vertexShader = new Shader(this.webglContext, this.gl.VERTEX_SHADER, vertexShaderSource);
             const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, null, renderPassInfo);
@@ -46,17 +48,28 @@ export default class Viewer {
             const shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
 
 
-            const textureSourceInfos: (TextureSourceInfo | null)[] = [];
+            const textureSourceInfos: TextureSourceInfo[] = [];
 
-            // 获取所有需要的渲染纹理
+            // 从render pass获取所有需要的渲染纹理
             for (const [uniformName, passesIndex] of Object.entries(renderPassInfo.requiredRenderPasses)) {
-                const currentFrameBuffer = frameBuffers[passesIndex];
-                const textureSourceInfo = currentFrameBuffer ?
-                    {
-                        uniformName: uniformName,
-                        textureSource: currentFrameBuffer.createTextureReference(0),
-                    } : 
-                    null;
+                const currentFrameBuffer = this.frameBuffers[passesIndex];
+                if (currentFrameBuffer == null) continue;
+                const textureSourceInfo = {
+                    uniformName: uniformName,
+                    textureSource: currentFrameBuffer.createTextureReference(0),
+                };
+                textureSourceInfos.push(textureSourceInfo);
+            }
+
+            // 从fileInfos中获取Texture
+            for (const [uniformName, fileIndex] of Object.entries(renderPassInfo.requiredTextures)) {
+                const fileInfo = this.webglContext.shaderData.fileInfos[fileIndex];
+                if (fileInfo.fileContent == undefined || !(fileInfo.fileContent instanceof Texture)) continue;
+   
+                const textureSourceInfo = {
+                    uniformName: uniformName,
+                    textureSource: fileInfo.fileContent,
+                };
                 textureSourceInfos.push(textureSourceInfo);
             }
 
@@ -67,7 +80,7 @@ export default class Viewer {
                 null :
                 new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
 
-            frameBuffers.push(frameBuffer);
+            this.frameBuffers.push(frameBuffer);
 
             passes.push(new RenderPass(this.gl, shaderProgram, textureSourceInfos, frameBuffer, renderPassInfo));
         });
@@ -106,5 +119,16 @@ export default class Viewer {
         // 开始渲染
         this.pipeline.init();
         requestAnimationFrame((ts) => this.loop(ts));
+    }
+
+    public viewportResize(width: number, height: number): void {
+        for (const frameBuffer of this.frameBuffers) {
+            if (frameBuffer == null) return;
+            frameBuffer.resize(width, height);
+        }
+
+        if (this.pipeline) {
+            this.pipeline.resize(width, height);
+        }
     }
 }

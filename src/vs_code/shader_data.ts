@@ -65,11 +65,12 @@ ShaderData{
     ]
 }
 */
+import Texture from "../webview/gl_preview/texture";
 
 export interface FileInfo {
     filePath: string;
     webviewUri: string;
-    fileContent?: string;
+    fileContent?: string | Texture;
 }
 
 export interface LineMapping {
@@ -90,9 +91,10 @@ export interface RenderPassInfo {
     lineMappings: LineMapping[];
     stringsToCheck: CheckingStrings;
     requiredRenderPasses: { [key: string]: number };
-    glslVersionInfo: {version:string, lingMapping: LineMapping} | null;
-    precisionFloatInfo: {precision:string, lingMapping: LineMapping} | null;
-    precisionIntInfo: {precision:string, lingMapping: LineMapping} | null;
+    requiredTextures: { [key: string]: number };
+    glslVersionMapping: LineMapping | null;
+    precisionFloatMapping: LineMapping | null;
+    precisionIntMapping: LineMapping | null;
 }
 
 export interface ShaderData {

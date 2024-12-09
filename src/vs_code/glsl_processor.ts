@@ -18,15 +18,16 @@ export function processChannel(
 
         
     console.log(`Process channels with file path: ${filePath}`);
-    const iChannelFiles = new Map<string, string>();
+    const iChannelFiles = new Map<string, {path: string, lineMapping: LineMapping}>();
     let renderPassInfo: RenderPassInfo = {
         includeFileTree: [],
         lineMappings: [],
         stringsToCheck: jsonDeepCopy(checkingStrings), // 使用json进行深拷贝
         requiredRenderPasses: {},
-        glslVersionInfo: null,
-        precisionFloatInfo: null,
-        precisionIntInfo: null
+        requiredTextures: {},
+        glslVersionMapping: null,
+        precisionFloatMapping: null,
+        precisionIntMapping: null
     };
 
     // 处理该文件 (全部相关的#include 会被整合为一个文件，而全部的 #ichannel 会被找出进行额外计算）
@@ -42,55 +43,37 @@ export function processChannel(
     const insertLineMappings: LineMapping[] = [];
 
     // 如果未找到版本号， 默认版本号为 300 es
-    if (renderPassInfo.glslVersionInfo == null){
-        renderPassInfo.glslVersionInfo = {
-            version: "300 es",
-            lingMapping: {
-                treeIndex: 0,
-                localLine: -1
-            }
+    if (renderPassInfo.glslVersionMapping == null){
+        renderPassInfo.glslVersionMapping = {
+            treeIndex: 0,
+            localLine: -1,
+            type: "replace",
+            replaceContent: `#version 300 es`
         };
     }
-    insertLineMappings.push({
-        treeIndex: renderPassInfo.glslVersionInfo.lingMapping.treeIndex,
-        localLine: renderPassInfo.glslVersionInfo.lingMapping.localLine,
-        type: "replace",
-        replaceContent: `#version ${renderPassInfo.glslVersionInfo.version}`,
-    });
+    insertLineMappings.push(renderPassInfo.glslVersionMapping);
 
     // 如果未找到 int 精度， 默认为 highp
-    if (renderPassInfo.precisionIntInfo == null){
-        renderPassInfo.precisionIntInfo = {
-            precision: "highp",
-            lingMapping: {
-                treeIndex: 0,
-                localLine: -1
-            }
+    if (renderPassInfo.precisionIntMapping == null){
+        renderPassInfo.precisionIntMapping = {
+            treeIndex: 0,
+            localLine: -1,
+            type: "replace",
+            replaceContent: `precision highp int;`
         };
     }
-    insertLineMappings.push({
-        treeIndex: renderPassInfo.precisionIntInfo.lingMapping.treeIndex,
-        localLine: renderPassInfo.precisionIntInfo.lingMapping.localLine,
-        type: "replace",
-        replaceContent: `precision ${renderPassInfo.precisionIntInfo.precision} int;`,
-    });
+    insertLineMappings.push(renderPassInfo.precisionIntMapping);
 
     // 如果未找到 float 精度， 默认为 highp
-    if (renderPassInfo.precisionFloatInfo == null){
-        renderPassInfo.precisionFloatInfo = {
-            precision: "highp",
-            lingMapping: {
-                treeIndex: 0,
-                localLine: -1
-            }
+    if (renderPassInfo.precisionFloatMapping == null){
+        renderPassInfo.precisionFloatMapping = {
+            treeIndex: 0,
+            localLine: -1,
+            type: "replace",
+            replaceContent: `precision highp float;`
         };
     }
-    insertLineMappings.push({
-        treeIndex: renderPassInfo.precisionFloatInfo.lingMapping.treeIndex,
-        localLine: renderPassInfo.precisionFloatInfo.lingMapping.localLine,
-        type: "replace",
-        replaceContent: `precision ${renderPassInfo.precisionFloatInfo.precision} float;`,
-    });
+    insertLineMappings.push(renderPassInfo.precisionFloatMapping);
 
     // 如果找到 string， 启用 uniform
     Object.entries(renderPassInfo.stringsToCheck).forEach(([string, stringInfo]) => {
@@ -104,19 +87,47 @@ export function processChannel(
         });
     });
 
-    renderPassInfo.lineMappings.unshift(...insertLineMappings);
-
     // 处理从上面获取的每一个 #ichannel
-    for (const [uniformName, channelFilePath] of iChannelFiles.entries()) {
+    for (const [uniformName, channelInfo] of iChannelFiles.entries()) {
         console.log(`Process channel: ${uniformName}`);
         // 如果文件存在
-        if (fs.existsSync(channelFilePath)){
-            let currentPassIndex = processChannel(channelFilePath, fileMap, passMap, shaderData);
-            renderPassInfo.requiredRenderPasses[uniformName] = currentPassIndex;
+        if (fs.existsSync(channelInfo.path)){
+            // 获取文件的扩展名
+            const fileExtension = path.extname(channelInfo.path).toLowerCase();
+            //console.log(`File extension: ${fileExtension}`);
+                
+            // 根据文件类型处理
+            switch (fileExtension) {
+                case '.png':
+                case '.jpg':
+                case '.jpeg':
+                    console.log(`Processing image file: ${channelInfo.path}`);
+                    // 获取该文件在全局文件列表中的index
+                    let fileIndex = fileMap.get(channelInfo.path);
+                    // 如果文件在全局中未被添加过， 添加到全局
+                    if (fileIndex == undefined){
+                        fileIndex = fileMap.size;
+                        fileMap.set(channelInfo.path, fileIndex);
+                    }
+                    renderPassInfo.requiredTextures[uniformName] = fileIndex;
+                    insertLineMappings.push(channelInfo.lineMapping);
+                    break;
+                case '.glsl':
+                    let currentPassIndex = processChannel(channelInfo.path, fileMap, passMap, shaderData);
+                    renderPassInfo.requiredRenderPasses[uniformName] = currentPassIndex;
+                    insertLineMappings.push(channelInfo.lineMapping);
+                    break;
+                default:
+                    console.log(`Unsupported file type: ${fileExtension}`);
+                    break;
+            }
+
         } else {
-            console.log(`Channel file not found: ${channelFilePath}`);
+            console.log(`Channel file not found: ${channelInfo.path}`);
         }
     }
+
+    renderPassInfo.lineMappings.unshift(...insertLineMappings);
 
     passIndex = passMap.size;
     passMap.set(filePath, passIndex);
@@ -125,12 +136,13 @@ export function processChannel(
 
 }
 
+
 function parseGLSL(
     filePath: string,
     fileMap: Map<string, number>,
     renderPassInfo: RenderPassInfo,
     processedFiles: Set<string>, // 用于跟踪已解析的文件路径
-    iChannelFiles: Map<string, string>, // 用于跟踪 #ichannel 文件路径
+    iChannelFiles: Map<string, {path: string, lineMapping: LineMapping}>, // 用于跟踪 #ichannel 文件路径
     startLine = 1,
     parentTreeIndex: number = -1,
     parentIncludeLine: number = -1
@@ -145,7 +157,7 @@ function parseGLSL(
 
     // 获取该文件在全局文件列表中的index
     let fileIndex = fileMap.get(filePath);
-    // 如果文件在全局中被添加过， 添加到全局再获取index
+    // 如果文件在全局中未被添加过， 添加到全局
     if (fileIndex == undefined){
         fileIndex = fileMap.size;
         fileMap.set(filePath, fileIndex);
@@ -172,7 +184,7 @@ function parseGLSL(
         // 检查 #version 指令
         const versionMatch = line.match(/^#version\s+(\d+)(\s+es)?/);
         if (versionMatch) {
-            if (!renderPassInfo.glslVersionInfo){
+            if (!renderPassInfo.glslVersionMapping){
                 const versionNumber = versionMatch[1]; // 提取版本号
                 const isES = !!versionMatch[2]; // 检查是否是 ES 版本
     
@@ -182,12 +194,11 @@ function parseGLSL(
                     `Found #version directive in file: ${filePath}, Line: ${i + 1}, Version: ${versionString}`
                 );
     
-                renderPassInfo.glslVersionInfo = {
-                    version: versionString,
-                    lingMapping: {
-                        treeIndex: treeIndex,
-                        localLine: i + 1
-                    }
+                renderPassInfo.glslVersionMapping = {
+                    treeIndex: treeIndex,
+                    localLine: i + 1,
+                    type: "replace",
+                    replaceContent: `#version ${versionString}`
                 };
             }
             continue;
@@ -200,31 +211,29 @@ function parseGLSL(
             const dataType = precisionMatch[2]; // float or int
 
             if (dataType == "int"){
-                if (!renderPassInfo.precisionIntInfo){
+                if (!renderPassInfo.precisionIntMapping){
                     console.log(
                         `Found precision directive in file: ${filePath}, Line: ${i + 1}, Precision: ${precisionLevel}, Type: int`
                     );
 
-                    renderPassInfo.precisionIntInfo = {
-                        precision: precisionLevel,
-                        lingMapping: {
-                            treeIndex: treeIndex,
-                            localLine: i + 1
-                        }
+                    renderPassInfo.precisionIntMapping = {
+                        treeIndex: treeIndex,
+                        localLine: i + 1,
+                        type: "replace",
+                        replaceContent: `precision ${precisionLevel} int;`
                     };
                 }
             }else if (dataType == "float"){
-                if (!renderPassInfo.precisionFloatInfo){
+                if (!renderPassInfo.precisionFloatMapping){
                     console.log(
                         `Found precision directive in file: ${filePath}, Line: ${i + 1}, Precision: ${precisionLevel}, Type: float`
                     );
 
-                    renderPassInfo.precisionFloatInfo = {
-                        precision: precisionLevel,
-                        lingMapping: {
-                            treeIndex: treeIndex,
-                            localLine: i + 1
-                        }
+                    renderPassInfo.precisionFloatMapping = {
+                        treeIndex: treeIndex,
+                        localLine: i + 1,
+                        type: "replace",
+                        replaceContent: `precision ${precisionLevel} float;`
                     };
                 }
             }
@@ -258,14 +267,19 @@ function parseGLSL(
             const customName = ichannelMatch[2];
             const uniformName = customName || `iChannel${channelNumber}`;
             const ichannelPath = path.resolve(path.dirname(filePath), ichannelMatch[3]); // 获取文件路径
-            iChannelFiles.set(uniformName, ichannelPath); // 添加到 iChannelFiles Map
+            iChannelFiles.set(
+                uniformName, 
+                {
+                    path: ichannelPath,
+                    lineMapping: {
+                        treeIndex: 0,
+                        localLine: i + 1,
+                        type: "replace",
+                        replaceContent: `uniform sampler2D ${uniformName};`
+                    }
+                }
+            ); // 添加到 iChannelFiles Map
 
-            renderPassInfo.lineMappings.push({
-                treeIndex: 0,
-                localLine: i + 1,
-                type: "replace",
-                replaceContent: `uniform sampler2D ${uniformName};`,
-            });
             continue; // 处理完后直接跳到下一行
         }
 

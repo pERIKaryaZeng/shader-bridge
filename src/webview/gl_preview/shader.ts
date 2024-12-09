@@ -23,9 +23,10 @@ export default class Shader {
             lineMappings: [],
             stringsToCheck: {},
             requiredRenderPasses: {},
-            glslVersionInfo: null,
-            precisionFloatInfo: null,
-            precisionIntInfo: null
+            requiredTextures: {},
+            glslVersionMapping: null,
+            precisionFloatMapping: null,
+            precisionIntMapping: null
         }
     ) {
         this.webglContext = webGlContext;
@@ -127,8 +128,11 @@ export default class Shader {
                     const treeNode = this.renderPassInfo.includeFileTree[mapping.treeIndex];
                     const file = this.webglContext.shaderData.fileInfos[treeNode.fileIndex];
                     const content = file.fileContent!;
-                    const lines = content.split('\n');
-                    return lines[mapping.localLine - 1];
+                    if (typeof content === "string"){
+                        const lines = content.split('\n');
+                        return lines[mapping.localLine - 1];
+                    }
+                    return '';
                 } else if (mapping.type == 'replace') {
                     return mapping.replaceContent;
                 }

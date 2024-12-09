@@ -76,7 +76,7 @@ function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.Extens
     const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "dist", " ")));
 
     try {
-
+        // fileMap 转换为 shaderData.fileInfos
         shaderData.fileInfos = Array.from(fileMap.keys(), (filePath, index) => {
 
             const content = fs.readFileSync(filePath, 'utf-8');
