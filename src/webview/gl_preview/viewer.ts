@@ -14,10 +14,9 @@ export default class Viewer {
     private currentTime: number = 0;
     private startTime: number | null = null;
     private initializationPromise: Promise<void>;
-    private frameBuffers: (FrameBuffer | null)[];
+    private frameBuffers: (FrameBuffer | null)[] = [];
 
     constructor(canvasId: string) {
-        this.frameBuffers = [];
         this.initializationPromise = this.initialize(canvasId);
     }
 
@@ -31,6 +30,11 @@ export default class Viewer {
             throw new Error("Failed to initialize WebGLContext: " + (error as Error).message);
         }
 
+        this.initContent();
+    }
+
+    private initContent(): void {
+        this.frameBuffers = [];
         // 初始化着色器
         const vertexShaderSource = 
             `#version 300 es
@@ -88,10 +92,8 @@ export default class Viewer {
         // 初始化渲染管线
         this.pipeline = new Pipeline(this.gl, passes);
 
-        // 初始化时间控制
-        this.currentTime = 0;
-        this.startTime = null;
-
+        this.pipeline.init();
+        
         console.log("Viewer initialized successfully.");
     }
 
@@ -117,18 +119,21 @@ export default class Viewer {
         await this.initializationPromise;
 
         // 开始渲染
-        this.pipeline.init();
+        this.reset();
         requestAnimationFrame((ts) => this.loop(ts));
     }
 
-    public viewportResize(width: number, height: number): void {
-        for (const frameBuffer of this.frameBuffers) {
-            if (frameBuffer == null) return;
-            frameBuffer.resize(width, height);
-        }
+    public reset(): void {
+        // 初始化时间控制
+        this.currentTime = 0;
+        this.startTime = null;
+    }
 
-        if (this.pipeline) {
-            this.pipeline.resize(width, height);
+    public viewportResize(width: number, height: number): void {
+        this.reset();
+        for (const frameBuffer of this.frameBuffers) {
+            if (frameBuffer == null) continue;
+            frameBuffer.resize(width, height);
         }
     }
 }

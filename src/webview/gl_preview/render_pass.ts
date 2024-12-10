@@ -13,7 +13,8 @@ export default class RenderPass implements Pass {
     private vao: WebGLVertexArrayObject | null;
     private frameBuffer: FrameBuffer | null;
     private renderPassInfo: RenderPassInfo;
-    private uniformInfos: { [key: string]: WebGLUniformLocation} = {};
+    private uniformLocations: { [key: string]: WebGLUniformLocation} = {};
+    private textureLocations: { [key: string]: WebGLUniformLocation} = {};
 
     constructor(
         gl: WebGL2RenderingContext,
@@ -29,10 +30,8 @@ export default class RenderPass implements Pass {
         this.vao = null;
         this.frameBuffer = frameBuffer;
         this.renderPassInfo = renderPassInfo;
-    }
 
-    public init(): void {
-        const gl = this.gl;
+ 
         console.log("RenderPass initialized");
 
         this.vao = gl.createVertexArray();
@@ -65,10 +64,12 @@ export default class RenderPass implements Pass {
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
         gl.bindVertexArray(null);
-        this.initUniforms();
+
     }
 
-    private initUniforms(): void {
+    public init(): void {
+        this.uniformLocations = {};
+        this.gl.useProgram(this.shaderProgram.get());
         this.addRequiredUniforms();
         this.bindTextureUniforms();
     }
@@ -78,7 +79,7 @@ export default class RenderPass implements Pass {
             if (!stringInfo.active) return;
             const uniformLocation = this.shaderProgram.getUniformLocation(uniformName);
             if (uniformLocation !== null) {
-                this.uniformInfos[uniformName] = uniformLocation;
+                this.uniformLocations[uniformName] = uniformLocation;
             }
         });
     }
@@ -90,13 +91,18 @@ export default class RenderPass implements Pass {
             const texture = textureSourceInfo.textureSource.getTexture();
             const uniformName = textureSourceInfo.uniformName;
 
-            const uniformLocation = this.shaderProgram.getUniformLocation(uniformName);
-            if (uniformLocation === null) {
-                console.log(`Uniform ${uniformName} not found in program`);
-                return;
-            }
+            let uniformLocation: WebGLUniformLocation | null;
+            if (this.textureLocations.hasOwnProperty(uniformName)) {
+                uniformLocation = this.textureLocations[uniformName];
+            }else{
+                uniformLocation = this.shaderProgram.getUniformLocation(uniformName);
+                if (uniformLocation === null) {
+                    console.log(`Uniform ${uniformName} not found in program`);
+                    return;
+                }
 
-            this.uniformInfos[uniformName] = uniformLocation;
+                this.textureLocations[uniformName] = uniformLocation;
+            }
 
             gl.activeTexture(gl.TEXTURE0 + index);
             gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -123,32 +129,16 @@ export default class RenderPass implements Pass {
 
         gl.useProgram(this.shaderProgram.get());
 
-        gl.uniform2f(this.uniformInfos.iResolution, size.width, size.height);
-        gl.uniform1f(this.uniformInfos.iTime, frameState.time);
-        gl.uniform1f(this.uniformInfos.iTimeDelta, frameState.timeDelta);
-        gl.uniform4f(this.uniformInfos.iMouse, frameState.mouse.x, frameState.mouse.y, 0.0, 0.0);
+        gl.uniform2f(this.uniformLocations.iResolution, size.width, size.height);
+        gl.uniform1f(this.uniformLocations.iTime, frameState.time);
+        gl.uniform1f(this.uniformLocations.iTimeDelta, frameState.timeDelta);
+        gl.uniform4f(this.uniformLocations.iMouse, frameState.mouse.x, frameState.mouse.y, 0.0, 0.0);
+
+        this.bindTextureUniforms();
 
         gl.bindVertexArray(this.vao);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         gl.bindVertexArray(null);
-    }
-
-    public resize(width: number, height: number): void {
-        const gl = this.gl;
-        let index = 0;
-        this.textureSourceInfos.forEach((textureSourceInfo) => {
-            if (!textureSourceInfo.textureSource.getIsFixedSize()){
-                const texture = textureSourceInfo.textureSource.getTexture();
-                const uniformName = textureSourceInfo.uniformName;
-
-                const uniformLocation = this.uniformInfos[uniformName];
-
-                gl.activeTexture(gl.TEXTURE0 + index);
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-                gl.uniform1i(uniformLocation, index);
-            }
-            index++;
-        });
     }
 
     public dispose(): void {

@@ -65,16 +65,18 @@ export default class WebGLContext {
             this.canvas.width = displayWidth;
             this.canvas.height = displayHeight;
 
-            // 更新 WebGL 视口
+            //更新 WebGL 视口
             this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
             console.log(
                 `Canvas resized to ${this.canvas.width}x${this.canvas.height}`
             );
+            
 
             this.viewer.viewportResize(this.canvas.width, this.canvas.height);
+
         }
-        
+                    
     }
 
     public async loadAllFileContents(): Promise<void> {

@@ -28,10 +28,6 @@ export default class Pipeline {
         this.passes.forEach((pass) => pass.update(frameState));
     }
 
-    public resize(width: number, height: number): void {
-        this.passes.forEach((pass) => pass.resize(width, height));
-    }
-
     /**
      * 销毁资源
      */

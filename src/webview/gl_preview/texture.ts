@@ -66,7 +66,4 @@ export default class Texture implements TextureSource {
         return this.texture;
     }
 
-    public getIsFixedSize(): boolean {
-        return true;
-    }
 }

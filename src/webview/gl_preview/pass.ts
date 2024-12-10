@@ -6,6 +6,5 @@ import FrameState from './frame_state';
 export default interface Pass {
     init(): void;
     update(frameState: FrameState): void;
-    resize(width: number, height: number): void;
     dispose(): void;
 }

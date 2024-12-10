@@ -4,24 +4,23 @@ export default class FrameBuffer {
     private gl: WebGL2RenderingContext; // 更新为 WebGL2RenderingContext
     private glFrameBuffer: WebGLFramebuffer | null;
     private glTextures: WebGLTexture[];
-    private glRenderBuffer: WebGLRenderbuffer | null;
+    //private glRenderBuffer: WebGLRenderbuffer | null;
     private width: number;
     private height: number;
-    private isFixedSize: boolean;
+    private outputNumber: number;
 
-    constructor(gl: WebGL2RenderingContext, width: number, height: number, outputs: number, isFixedSize: boolean = false) {
+    constructor(gl: WebGL2RenderingContext, width: number, height: number, outputNumber: number) {
         this.gl = gl;
         this.width = width;
         this.height = height;
-        this.isFixedSize = isFixedSize;
+        this.outputNumber = outputNumber;
 
         this.glFrameBuffer = gl.createFramebuffer();
         if (!this.glFrameBuffer) throw new Error("Failed to create framebuffer");
 
-        this.glTextures = this.createTextures(width, height, outputs);
-        this.glRenderBuffer = this.createRenderbuffer(width, height);
-
-        this.attachResources(outputs);
+        this.glTextures = this.createTextures();
+        this.attachResources();
+        //this.glRenderBuffer = this.createRenderbuffer(width, height);
     }
 
     public get(): WebGLFramebuffer | null {
@@ -32,16 +31,16 @@ export default class FrameBuffer {
         return { width: this.width, height: this.height };
     }
 
-    private createTextures(width: number, height: number, outputs: number): WebGLTexture[] {
+    private createTextures(): WebGLTexture[] {
         const textures: WebGLTexture[] = [];
-        for (let i = 0; i < outputs; i++) {
+        for (let i = 0; i < this.outputNumber; i++) {
             const texture = this.gl.createTexture();
             if (!texture) throw new Error(`Failed to create texture for output ${i}`);
 
             this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
 
             // 使用 texStorage2D 提高性能
-            this.gl.texStorage2D(this.gl.TEXTURE_2D, 1, this.gl.RGBA8, width, height);
+            this.gl.texStorage2D(this.gl.TEXTURE_2D, 1, this.gl.RGBA8, this.width, this.height);
 
             // 设置纹理参数
             this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
@@ -54,25 +53,25 @@ export default class FrameBuffer {
         return textures;
     }
 
-    private createRenderbuffer(width: number, height: number): WebGLRenderbuffer | null {
-        const renderbuffer = this.gl.createRenderbuffer();
-        if (!renderbuffer) return null;
+    // private createRenderbuffer(width: number, height: number): WebGLRenderbuffer | null {
+    //     const renderbuffer = this.gl.createRenderbuffer();
+    //     if (!renderbuffer) return null;
 
-        this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, renderbuffer);
-        this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, width, height);
+    //     this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, renderbuffer);
+    //     this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, width, height);
 
-        return renderbuffer;
-    }
+    //     return renderbuffer;
+    // }
 
-    private attachResources(outputs: number): void {
+    private attachResources(): void {
         if (!this.glFrameBuffer) throw new Error("Failed to create frameBuffer");
 
         const gl = this.gl;
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, this.glFrameBuffer);
+        this.bind();
 
         const drawBuffers: number[] = [];
-        for (let i = 0; i < outputs; i++) {
+        for (let i = 0; i < this.outputNumber; i++) {
             gl.framebufferTexture2D(
                 gl.FRAMEBUFFER,
                 gl.COLOR_ATTACHMENT0 + i,
@@ -86,15 +85,15 @@ export default class FrameBuffer {
         // 使用 WebGL 2.0 的内置 drawBuffers
         gl.drawBuffers(drawBuffers);
 
-        // 可选：为深度缓冲区附加 renderbuffer
-        if (this.glRenderBuffer) {
-            gl.framebufferRenderbuffer(
-                gl.FRAMEBUFFER,
-                gl.DEPTH_ATTACHMENT,
-                gl.RENDERBUFFER,
-                this.glRenderBuffer
-            );
-        }
+        // // 可选：为深度缓冲区附加 renderbuffer
+        // if (this.glRenderBuffer) {
+        //     gl.framebufferRenderbuffer(
+        //         gl.FRAMEBUFFER,
+        //         gl.DEPTH_ATTACHMENT,
+        //         gl.RENDERBUFFER,
+        //         this.glRenderBuffer
+        //     );
+        // }
 
         // 检查帧缓冲区完整性
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
@@ -103,36 +102,35 @@ export default class FrameBuffer {
         }
 
         // 解绑帧缓冲区
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        this.unbind();
     }
 
     public resize(newWidth: number, newHeight: number): void {
-        if (this.isFixedSize) return;
-
-        if (this.width === newWidth && this.height === newHeight) {
-            // 如果分辨率未变化，直接返回
-            return;
-        }
+        // if (this.width === newWidth && this.height === newHeight) {
+        //     // 如果分辨率未变化，直接返回
+        //     return;
+        // }
     
         this.width = newWidth;
         this.height = newHeight;
+
+
     
         const gl = this.gl;
     
         // 删除旧资源
         this.glTextures.forEach((texture) => gl.deleteTexture(texture));
-        if (this.glRenderBuffer) {
-            gl.deleteRenderbuffer(this.glRenderBuffer);
-        }
-    
+        // if (this.glRenderBuffer) {
+        //     gl.deleteRenderbuffer(this.glRenderBuffer);
+        // }
+
         // 重新创建纹理
-        this.glTextures = this.createTextures(newWidth, newHeight, this.glTextures.length);
-    
-        // 重新创建渲染缓冲区
-        this.glRenderBuffer = this.createRenderbuffer(newWidth, newHeight);
-    
+        this.glTextures = this.createTextures();
         // 重新绑定所有资源
-        this.attachResources(this.glTextures.length);
+        this.attachResources();
+    
+        //// 重新创建渲染缓冲区
+        //this.glRenderBuffer = this.createRenderbuffer(newWidth, newHeight);
     }
 
     public bind(): void {
@@ -149,10 +147,6 @@ export default class FrameBuffer {
         }
         return this.glTextures[index];
     }
-    
-    public getIsFixedSize(): boolean {
-        return this.isFixedSize;
-    }
 
     public createTextureReference(index: number): FrameBufferTextureReference {
         return new FrameBufferTextureReference(this, index);
@@ -163,11 +157,11 @@ export default class FrameBuffer {
 
         if (this.glFrameBuffer) gl.deleteFramebuffer(this.glFrameBuffer);
         this.glTextures.forEach((texture) => gl.deleteTexture(texture));
-        if (this.glRenderBuffer) gl.deleteRenderbuffer(this.glRenderBuffer);
+        //if (this.glRenderBuffer) gl.deleteRenderbuffer(this.glRenderBuffer);
 
         this.glFrameBuffer = null;
         this.glTextures = [];
-        this.glRenderBuffer = null;
+        //this.glRenderBuffer = null;
     }
 }
 
@@ -183,8 +177,5 @@ export class FrameBufferTextureReference implements TextureSource {
         return this.frameBuffer.getTexture(this.textureIndex);
     }
 
-    public getIsFixedSize(): boolean {
-        return this.frameBuffer.getIsFixedSize();
-    }
 }
 
