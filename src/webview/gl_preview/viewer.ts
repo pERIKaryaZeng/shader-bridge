@@ -15,6 +15,8 @@ export default class Viewer {
     private startTime: number | null = null;
     private initializationPromise: Promise<void>;
     private frameBuffers: (FrameBuffer | null)[] = [];
+    private paused: boolean = false; // 控制暂停状态
+    private mouse: {x: number, y: number} = {x: 0, y: 0}; // 鼠标位置帧计数器
 
     constructor(canvasId: string) {
         this.initializationPromise = this.initialize(canvasId);
@@ -99,6 +101,9 @@ export default class Viewer {
 
     private loop(timestamp: number): void {
         if (!this.startTime) this.startTime = timestamp;
+        if (this.paused) {
+            return; // 如果暂停，不继续渲染
+        }
         const deltaTime = (timestamp - this.startTime) / 1000;
         this.startTime = timestamp;
 
@@ -106,10 +111,7 @@ export default class Viewer {
         this.pipeline.update({
             time: this.currentTime,
             timeDelta: deltaTime,
-            mouse:{
-                x: 0,
-                y: 0
-            }
+            mouse: this.mouse
         });
         requestAnimationFrame((ts) => this.loop(ts));
     }
@@ -127,13 +129,40 @@ export default class Viewer {
         // 初始化时间控制
         this.currentTime = 0;
         this.startTime = null;
+        if (this.paused){
+            this.paused = false;
+            requestAnimationFrame((ts) => this.loop(ts));
+        }
+    }
+
+    public isPaused(): boolean {
+        return this.paused;
+    }
+
+    // 暂停功能
+    public pause(): void {
+        this.paused = true;
+        console.log("Rendering paused.");
+    }
+
+    // 继续功能
+    public resume(): void {
+        if (!this.paused) return; // 如果未暂停，直接返回
+        this.paused = false;
+        this.startTime = null;
+        console.log("Rendering resumed.");
+        requestAnimationFrame((ts) => this.loop(ts));
     }
 
     public viewportResize(width: number, height: number): void {
-        this.reset();
         for (const frameBuffer of this.frameBuffers) {
             if (frameBuffer == null) continue;
             frameBuffer.resize(width, height);
         }
+        this.reset();
+    }
+
+    public setMouse(x: number, y: number): void {
+        this.mouse = {x, y};
     }
 }

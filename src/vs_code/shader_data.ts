@@ -95,6 +95,25 @@ export interface RenderPassInfo {
     glslVersionMapping: LineMapping | null;
     precisionFloatMapping: LineMapping | null;
     precisionIntMapping: LineMapping | null;
+    definedOutput: boolean;
+    hasMain: boolean;
+    hasMainImage: boolean;
+}
+
+export function getDefaultRenderPassInfo(): RenderPassInfo{
+    return {
+        includeFileTree: [],
+        lineMappings: [],
+        stringsToCheck: getDefaultCheckingStrings(),
+        requiredRenderPasses: {},
+        requiredTextures: {},
+        glslVersionMapping: null,
+        precisionFloatMapping: null,
+        precisionIntMapping: null,
+        definedOutput: false,
+        hasMain: false,
+        hasMainImage: false
+    };
 }
 
 export interface ShaderData {
@@ -104,17 +123,20 @@ export interface ShaderData {
 
 export interface CheckingStrings {[key: string]: {active: boolean, type: string}}
 
-export const checkingStrings: CheckingStrings = {
-    "gl_FragColor": {active: false, type: "vec2"},
-    "iResolution": {active: false, type: "vec2"},
-    "iTime": {active: false, type: "float"},
-    "iTimeDelta": {active: false, type: "float"},
-    "iMouse": {active: false, type: "vec4"},
+
+export function getDefaultCheckingStrings(): CheckingStrings{
+    return {
+        "gl_FragColor": {active: false, type: "vec2"},
+        "iResolution": {active: false, type: "vec2"},
+        "iTime": {active: false, type: "float"},
+        "iTimeDelta": {active: false, type: "float"},
+        "iMouse": {active: false, type: "vec4"},
+    };
 }
 
 // 构造正则表达式，仅匹配未找到的字符串
 export const checkingRegex = new RegExp(
-    Object.keys(checkingStrings)
+    Object.keys(getDefaultCheckingStrings())
         .map(key => `(?<![a-zA-Z0-9_])${key}(?![a-zA-Z0-9_])`) // GLSL 边界匹配
         .join('|'),
     'g'

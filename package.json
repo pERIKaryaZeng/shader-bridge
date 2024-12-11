@@ -75,6 +75,8 @@
   },
   "dependencies": {
     "elkjs": "^0.8.2",
+    "glsl-parser": "^2.0.1",
+    "glsl-tokenizer": "^2.1.5",
     "glslify": "^7.1.1",
     "react-scripts": "^5.0.1",
     "rete": "^2.0.5",

@@ -38,6 +38,42 @@
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
             display: none;
         }
+
+        .ui-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #00000000;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-around;
+            transform: translateY(100%); /* 初始隐藏在下方 */
+            transition: transform 0.5s ease-in-out; /* 添加平滑过渡 */
+            pointer-events: none;
+        }
+
+        .ui-container.visible {
+            transform: translateY(0); /* 滑动上来 */
+        }
+
+        button {
+            background-color: white;
+            color: #007bff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.2s ease;
+            pointer-events: auto;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -45,6 +81,12 @@
     <div id="shaderData" style="display: none;">{{SHADER_DATA}}</div>
     <canvas id="glCanvas"></canvas>
     <script type="module" src="gl_preview.js"></script>
+
+    <div class="ui-container" id="ui-container">
+        <button id="playButton">Play</button>
+        <button id="resetButton">Reset</button>
+    </div>
+
     <script>
         function toggleDetails(event, filePath, lineNumber) {
             event.preventDefault(); // 阻止默认行为
@@ -63,6 +105,24 @@
             }
         }
     </script>
+
+    <script>
+        // JavaScript 功能 (伸缩UI)
+        const uiContainer = document.getElementById('ui-container');
+        const triggerHeight = window.innerHeight * 0.75;
+
+        // 检测鼠标移动
+        document.addEventListener('mousemove', (event) => {
+            if (event.clientY > triggerHeight) {
+                // 鼠标在底部 1/4 区域，显示 UI
+                uiContainer.classList.add('visible');
+            } else {
+                // 鼠标移出底部 1/4 区域，隐藏 UI
+                uiContainer.classList.remove('visible');
+            }
+        });
+    </script>
+
    
 </body>
 </html>

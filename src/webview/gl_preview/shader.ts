@@ -1,5 +1,5 @@
 import WebGLContext from './web_gl_context';
-import { RenderPassInfo } from '../../vs_code/shader_data';
+import { RenderPassInfo, getDefaultRenderPassInfo } from '../../vs_code/shader_data';
 import { generateRandomId } from '../../vs_code/string_tools';
 
 interface FileAndLineInfo {
@@ -18,16 +18,7 @@ export default class Shader {
         private webGlContext: WebGLContext, // 假设 WebGLContext 是一个类型，包含 `gl` 和其他辅助方法
         type: number,
         source: string | null,
-        renderPassInfo: RenderPassInfo = {
-            includeFileTree: [],
-            lineMappings: [],
-            stringsToCheck: {},
-            requiredRenderPasses: {},
-            requiredTextures: {},
-            glslVersionMapping: null,
-            precisionFloatMapping: null,
-            precisionIntMapping: null
-        }
+        renderPassInfo: RenderPassInfo = getDefaultRenderPassInfo()
     ) {
         this.webglContext = webGlContext;
         this.gl = webGlContext.get() as WebGL2RenderingContext; // 确保是 WebGL2 上下文

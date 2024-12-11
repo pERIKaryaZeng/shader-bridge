@@ -1,7 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { removeComments, jsonDeepCopy } from './string_tools';
-import { checkingRegex, checkingStrings, RenderPassInfo, ShaderData, LineMapping } from './shader_data';
+import { removeComments } from './string_tools';
+import {
+    checkingRegex,
+    getDefaultCheckingStrings,
+    RenderPassInfo,
+    ShaderData,
+    LineMapping,
+    getDefaultRenderPassInfo
+} from './shader_data';
 
 export function processChannel(
     filePath: string,
@@ -19,16 +26,7 @@ export function processChannel(
         
     console.log(`Process channels with file path: ${filePath}`);
     const iChannelFiles = new Map<string, {path: string, lineMapping: LineMapping}>();
-    let renderPassInfo: RenderPassInfo = {
-        includeFileTree: [],
-        lineMappings: [],
-        stringsToCheck: jsonDeepCopy(checkingStrings), // 使用json进行深拷贝
-        requiredRenderPasses: {},
-        requiredTextures: {},
-        glslVersionMapping: null,
-        precisionFloatMapping: null,
-        precisionIntMapping: null
-    };
+    let renderPassInfo: RenderPassInfo = getDefaultRenderPassInfo();
 
     // 处理该文件 (全部相关的#include 会被整合为一个文件，而全部的 #ichannel 会被找出进行额外计算）
     const processedFiles = new Set<string>();
@@ -87,6 +85,15 @@ export function processChannel(
         });
     });
 
+    if (!renderPassInfo.definedOutput){
+        insertLineMappings.push({
+            treeIndex: 0,
+            localLine: -1,
+            type: "replace",
+            replaceContent: `out vec4 FragColor;`,
+        });
+    }
+
     // 处理从上面获取的每一个 #ichannel
     for (const [uniformName, channelInfo] of iChannelFiles.entries()) {
         console.log(`Process channel: ${uniformName}`);
@@ -128,6 +135,15 @@ export function processChannel(
     }
 
     renderPassInfo.lineMappings.unshift(...insertLineMappings);
+
+    if (!renderPassInfo.definedOutput && !renderPassInfo.hasMain && renderPassInfo.hasMainImage){
+        renderPassInfo.lineMappings.push({
+            treeIndex: 0,
+            localLine: -1,
+            type: "replace",
+            replaceContent: `void main() {mainImage(FragColor, gl_FragCoord.xy);}`,
+        });
+    }
 
     passIndex = passMap.size;
     passMap.set(filePath, passIndex);
@@ -241,6 +257,33 @@ function parseGLSL(
             continue;
         }
 
+        // 检查是否设置out输出
+        if (!renderPassInfo.definedOutput) {
+            const outMatch = line.match(/^(layout\s*\(.*?\)\s*)?out\s+\w+/);
+            if (outMatch) {
+                console.log(`Found "out" declaration in file: ${filePath}, Line: ${i + 1}`);
+                renderPassInfo.definedOutput = true;
+            }
+        }
+
+        // 检查是否有main()
+        if (!renderPassInfo.hasMain) {
+            const mainMatch = line.match(/void\s+main\s*\(\s*\)/);
+            if (mainMatch) {
+                console.log(`Found "main" function declaration in file: ${filePath}, Line: ${i + 1}`);
+                renderPassInfo.hasMain = true;
+            }
+        }
+
+        // 检查是否有mainImage()
+        if (!renderPassInfo.hasMainImage) {
+            const mainImageMatch = line.match(/void\s+mainImage\s*\(\s*out\s+vec4\s+\w+,\s*in\s+vec2\s+\w+\s*\)/);
+            if (mainImageMatch) {
+                console.log(`Found "mainImage" function declaration in file: ${filePath}, Line: ${i + 1}`);
+                renderPassInfo.hasMainImage = true;
+            }
+        }
+                
         // 优先匹配 #include 指令
         const includeMatch = line.match(/#include\s+["'](.+?)["']/);
         if (includeMatch) {

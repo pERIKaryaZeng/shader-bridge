@@ -41,6 +41,17 @@ export default class WebGLContext {
         this.resizeCanvasToDisplaySize();
 
 
+        const rect = this.canvas.getBoundingClientRect();
+        this.canvas.addEventListener('mousemove', (event) => {
+            // 获取鼠标在 canvas 内的坐标
+            const mouseX = event.clientX - rect.left;
+            const mouseY = this.canvas.height-(event.clientY - rect.top);
+
+            this.viewer.setMouse(mouseX, mouseY);
+        });
+
+        this.initButtons();
+
         // 监听窗口大小变化
         window.addEventListener('resize', () => this.resizeCanvasToDisplaySize());
         
@@ -52,6 +63,28 @@ export default class WebGLContext {
             return; // 终止后续逻辑
         }
     }
+
+    
+    private initButtons(): void {
+        const playButton = document.getElementById('playButton');
+        if(playButton){
+            playButton.addEventListener('click', () => {
+                if (this.viewer.isPaused()) {
+                    this.viewer.resume();
+                }else{
+                    this.viewer.pause();
+                }
+            });
+        }
+
+        const resetButton = document.getElementById('resetButton');
+        if(resetButton){
+            resetButton.addEventListener('click', () => {
+                this.viewer.reset();
+            });
+        }
+    }
+
 
     // 调整 Canvas 大小并更新 WebGL 视口
     private resizeCanvasToDisplaySize(): void {
