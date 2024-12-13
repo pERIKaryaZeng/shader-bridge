@@ -1,6 +1,19 @@
 import { TextureSource } from "./texture_source";
 
-export default class FrameBuffer {
+export interface IFrameBuffer {
+    get(): WebGLFramebuffer | null;
+    getSize(): { width: number; height: number };
+    resize(newWidth: number, newHeight: number): void;
+    bind(): void;
+    unbind(): void;
+    clearTextures(clearColor: [number, number, number, number]): void;
+    getTexture(index: number): WebGLTexture;
+    createTextureReference(index: number): FrameBufferTextureReference;
+    endFrame(): void;
+    destroy(): void;
+}
+
+export class FrameBuffer implements IFrameBuffer{
     private gl: WebGL2RenderingContext; // 更新为 WebGL2RenderingContext
     private glFrameBuffer: WebGLFramebuffer | null;
     private glTextures: WebGLTexture[];
@@ -141,6 +154,34 @@ export default class FrameBuffer {
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     }
 
+    public clearTextures(clearColor: [number, number, number, number]): void {
+        const gl = this.gl;
+    
+        if (!this.glFrameBuffer) throw new Error("Framebuffer is not initialized");
+    
+        this.bind();
+    
+        // 遍历每个纹理并清空
+        for (let i = 0; i < this.outputNumber; i++) {
+            // 设置清除颜色
+            gl.clearColor(...clearColor);
+    
+            // 附加当前纹理为渲染目标
+            gl.framebufferTexture2D(
+                gl.FRAMEBUFFER,
+                gl.COLOR_ATTACHMENT0 + i,
+                gl.TEXTURE_2D,
+                this.glTextures[i],
+                0
+            );
+    
+            // 清除当前附件
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+    
+        this.unbind();
+    }
+
     public getTexture(index: number): WebGLTexture {
         if (index < 0 || index >= this.glTextures.length) {
             throw new Error(`Texture index ${index} out of range`);
@@ -151,6 +192,8 @@ export default class FrameBuffer {
     public createTextureReference(index: number): FrameBufferTextureReference {
         return new FrameBufferTextureReference(this, index);
     }
+
+    public endFrame(): void {}
 
     public destroy(): void {
         const gl = this.gl;
@@ -166,9 +209,9 @@ export default class FrameBuffer {
 }
 
 export class FrameBufferTextureReference implements TextureSource {
-    private frameBuffer: FrameBuffer;
+    private frameBuffer: IFrameBuffer;
     private textureIndex: number;
-    constructor(frameBuffer: FrameBuffer, textureIndex: number) {
+    constructor(frameBuffer: IFrameBuffer, textureIndex: number) {
         this.frameBuffer = frameBuffer;
         this.textureIndex = textureIndex;
     }

@@ -20,13 +20,17 @@ export function processChannel(
     let passIndex = passMap.get(filePath);
     // 如果pass在全局中被添加过， 则跳过
     if (passIndex != undefined){
+        shaderData.renderPassInfos[passIndex].isDoubleBuffering = true;
         return passIndex;
     }
 
+    passIndex = passMap.size;
+    passMap.set(filePath, passIndex);
         
     console.log(`Process channels with file path: ${filePath}`);
-    const iChannelFiles = new Map<string, {path: string, lineMapping: LineMapping}>();
+    const channelFiles = new Map<string, {path: string, lineMapping: LineMapping}>();
     let renderPassInfo: RenderPassInfo = getDefaultRenderPassInfo();
+    shaderData.renderPassInfos.push(renderPassInfo);
 
     // 处理该文件 (全部相关的#include 会被整合为一个文件，而全部的 #ichannel 会被找出进行额外计算）
     const processedFiles = new Set<string>();
@@ -35,7 +39,7 @@ export function processChannel(
         fileMap,
         renderPassInfo,
         processedFiles,
-        iChannelFiles
+        channelFiles
     );
 
     const insertLineMappings: LineMapping[] = [];
@@ -95,7 +99,8 @@ export function processChannel(
     }
 
     // 处理从上面获取的每一个 #ichannel
-    for (const [uniformName, channelInfo] of iChannelFiles.entries()) {
+    const reversedChannelFiles = [...channelFiles.entries()].reverse();
+    for (const [uniformName, channelInfo] of reversedChannelFiles) {
         console.log(`Process channel: ${uniformName}`);
         // 如果文件存在
         if (fs.existsSync(channelInfo.path)){
@@ -144,10 +149,6 @@ export function processChannel(
             replaceContent: `void main() {mainImage(FragColor, gl_FragCoord.xy);}`,
         });
     }
-
-    passIndex = passMap.size;
-    passMap.set(filePath, passIndex);
-    shaderData.renderPassInfos.push(renderPassInfo);
     return passIndex;
 
 }

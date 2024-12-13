@@ -1,3 +1,4 @@
+import { IFrameBuffer } from './frame_buffer';
 import FrameState from './frame_state';
 
 /**
@@ -6,5 +7,7 @@ import FrameState from './frame_state';
 export default interface Pass {
     init(): void;
     update(frameState: FrameState): void;
+    endFrame(): void;
     dispose(): void;
+    getFrameBuffer(): IFrameBuffer | null;
 }

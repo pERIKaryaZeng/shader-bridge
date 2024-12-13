@@ -3,9 +3,11 @@ import ShaderProgram from './shader_program';
 import Shader from './shader';
 import RenderPass from './render_pass';
 import Pipeline from './pipeline';
-import FrameBuffer from './frame_buffer';
+import { FrameBuffer, IFrameBuffer } from './frame_buffer';
+import DoubleFrameBuffer from './double_frame_buffer';
 import { TextureSourceInfo } from './texture_source';
 import Texture from './texture';
+import { getDefaultRenderPassInfo } from '../../vs_code/shader_data';
 
 export default class Viewer {
     private pipeline!: Pipeline;
@@ -14,7 +16,7 @@ export default class Viewer {
     private currentTime: number = 0;
     private startTime: number | null = null;
     private initializationPromise: Promise<void>;
-    private frameBuffers: (FrameBuffer | null)[] = [];
+    private frameBuffers: IFrameBuffer[] = [];
     private paused: boolean = false; // 控制暂停状态
     private mouse: {x: number, y: number} = {x: 0, y: 0}; // 鼠标位置帧计数器
 
@@ -46,8 +48,38 @@ export default class Viewer {
                 gl_Position = a_position;
             }`;
 
+        const fragmentShaderSource = 
+            `#version 300 es
+            precision highp float;
+            layout(location = 0) out vec4 fragColor;
+            uniform vec2 iResolution;
+            uniform sampler2D mainColor;
+
+            void main() {
+                fragColor = texture(mainColor, gl_FragCoord.xy / iResolution.xy);
+            }`;
+
+
         const passes: RenderPass[] = [];
-        this.webglContext.shaderData.renderPassInfos.forEach((renderPassInfo, index, array) => {
+        const renderPassInfos = this.webglContext.shaderData.renderPassInfos;
+        //this.webglContext.shaderData.renderPassInfos.forEach((renderPassInfo, index, array) => {
+
+        for (let index = 0; index < renderPassInfos.length; index++) {
+            const renderPassInfo = renderPassInfos[index];
+
+            let frameBuffer: IFrameBuffer;
+            if (renderPassInfo.isDoubleBuffering){
+                frameBuffer = new DoubleFrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
+            }else{
+                frameBuffer = new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
+            }
+
+            this.frameBuffers.push(frameBuffer);
+        };
+
+        for (let index = renderPassInfos.length - 1; index >= 0; index--) {
+            const renderPassInfo = renderPassInfos[index];
+
             const vertexShader = new Shader(this.webglContext, this.gl.VERTEX_SHADER, vertexShaderSource);
             const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, null, renderPassInfo);
 
@@ -64,6 +96,9 @@ export default class Viewer {
                     uniformName: uniformName,
                     textureSource: currentFrameBuffer.createTextureReference(0),
                 };
+                console.log("ddddddddddddddddddddddddddddddddddddddddddddddd");
+                console.log("textureSourceInfo", textureSourceInfo);
+                console.log("sssssssssssssssssssssssssssssssssssssssssssss");
                 textureSourceInfos.push(textureSourceInfo);
             }
 
@@ -79,17 +114,19 @@ export default class Viewer {
                 textureSourceInfos.push(textureSourceInfo);
             }
 
-            // 初始化渲染器
-            const isLast = index === array.length - 1;
+            passes.push(new RenderPass(this.gl, shaderProgram, textureSourceInfos, this.frameBuffers[index], renderPassInfo));
+        };
 
-            const frameBuffer: FrameBuffer | null = isLast ?
-                null :
-                new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
 
-            this.frameBuffers.push(frameBuffer);
 
-            passes.push(new RenderPass(this.gl, shaderProgram, textureSourceInfos, frameBuffer, renderPassInfo));
-        });
+
+        // 最后一个pass用于渲染到屏幕上
+        const vertexShader = new Shader(this.webglContext, this.gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
+        const renderPassInfo = getDefaultRenderPassInfo();
+        renderPassInfo.stringsToCheck["iResolution"].active = true;
+        passes.push(new RenderPass(this.gl, shaderProgram, [{uniformName: "mainColor", textureSource:this.frameBuffers[0].createTextureReference(0)}], null, renderPassInfo));
 
         // 初始化渲染管线
         this.pipeline = new Pipeline(this.gl, passes);
@@ -113,6 +150,8 @@ export default class Viewer {
             timeDelta: deltaTime,
             mouse: this.mouse
         });
+
+        this.pipeline.endFrame();
         requestAnimationFrame((ts) => this.loop(ts));
     }
 
@@ -129,6 +168,10 @@ export default class Viewer {
         // 初始化时间控制
         this.currentTime = 0;
         this.startTime = null;
+        for (const frameBuffer of this.frameBuffers) {
+            if (frameBuffer == null) continue;
+            frameBuffer.clearTextures([0.0,0.0,0.0,0.0]);
+        }
         if (this.paused){
             this.paused = false;
             requestAnimationFrame((ts) => this.loop(ts));

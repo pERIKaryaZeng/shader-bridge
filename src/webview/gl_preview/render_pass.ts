@@ -1,7 +1,7 @@
 import Pass from './pass';
 import ShaderProgram from './shader_program';
-import FrameBuffer from './frame_buffer';
-import {TextureSourceInfo} from './texture_source';
+import { IFrameBuffer } from './frame_buffer';
+import { TextureSourceInfo } from './texture_source';
 import { RenderPassInfo } from '../../vs_code/shader_data';
 import FrameState from './frame_state';
 
@@ -11,7 +11,7 @@ export default class RenderPass implements Pass {
     private textureSourceInfos: TextureSourceInfo[];
     private positionBuffer: WebGLBuffer | null;
     private vao: WebGLVertexArrayObject | null;
-    private frameBuffer: FrameBuffer | null;
+    private frameBuffer: IFrameBuffer | null;
     private renderPassInfo: RenderPassInfo;
     private uniformLocations: { [key: string]: WebGLUniformLocation} = {};
     private textureLocations: { [key: string]: WebGLUniformLocation} = {};
@@ -20,7 +20,7 @@ export default class RenderPass implements Pass {
         gl: WebGL2RenderingContext,
         shaderProgram: ShaderProgram,
         textureSourceInfos: TextureSourceInfo[],
-        frameBuffer: FrameBuffer | null = null,
+        frameBuffer: IFrameBuffer | null,
         renderPassInfo: RenderPassInfo
     ) {
         this.gl = gl;
@@ -114,14 +114,15 @@ export default class RenderPass implements Pass {
     public update(frameState: FrameState): void {
         const gl = this.gl;
 
-        let size: { width: number; height: number };
-        if (this.frameBuffer == null) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            size = { width: gl.canvas.width, height: gl.canvas.height };
-        } else {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer.get());
+        let size;
+        if (this.frameBuffer) {
+            this.frameBuffer.bind();
             size = this.frameBuffer.getSize();
+        }else {
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+            size = { width: gl.canvas.width, height: gl.canvas.height };
         }
+        
 
         gl.viewport(0, 0, size.width, size.height);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -139,6 +140,17 @@ export default class RenderPass implements Pass {
         gl.bindVertexArray(this.vao);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         gl.bindVertexArray(null);
+        
+    }
+
+    public getFrameBuffer(): IFrameBuffer | null {
+        return this.frameBuffer;
+    }
+
+    public endFrame(): void {
+        if (this.frameBuffer) {
+            this.frameBuffer.endFrame();
+        }
     }
 
     public dispose(): void {

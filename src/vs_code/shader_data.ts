@@ -98,6 +98,7 @@ export interface RenderPassInfo {
     definedOutput: boolean;
     hasMain: boolean;
     hasMainImage: boolean;
+    isDoubleBuffering: boolean;
 }
 
 export function getDefaultRenderPassInfo(): RenderPassInfo{
@@ -112,7 +113,8 @@ export function getDefaultRenderPassInfo(): RenderPassInfo{
         precisionIntMapping: null,
         definedOutput: false,
         hasMain: false,
-        hasMainImage: false
+        hasMainImage: false,
+        isDoubleBuffering: false
     };
 }
 
