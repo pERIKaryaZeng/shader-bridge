@@ -78,15 +78,23 @@ function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.Extens
     try {
         // fileMap 转换为 shaderData.fileInfos
         shaderData.fileInfos = Array.from(fileMap.keys(), (filePath, index) => {
+            // 使用正则表达式来判断是否为网络路径
+            const isLocalPath = !/^https?:\/\/\S+/.test(filePath);
+            let webviewUri;
+            if (isLocalPath) {
+                // 本地文件，使用 VS Code 的 API 转换为 webview 可用的 URI
+                webviewUri = panel.webview.asWebviewUri(vscode.Uri.file(filePath)).toString();
+            } else {
+                // 非本地文件，直接使用处理过的原始的 URL
+                webviewUri = filePath;
+            }
 
-            const content = fs.readFileSync(filePath, 'utf-8');
-    
-            const webviewUri = panel.webview.asWebviewUri(vscode.Uri.file(filePath));
+            console.log("Webview URI: ", webviewUri);
     
             return {
                 filePath: encodeBase64(filePath), 
                 webviewUri: encodeBase64(webviewUri.toString()), 
-                fileContent: ""//encodeBase64(content)
+                fileContent: ""
             };
         });
 
@@ -94,6 +102,7 @@ function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.Extens
 
         const htmlPath = path.join(context.extensionPath, 'dist', 'gl_preview.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf-8');
+        const cspSource = panel.webview.cspSource;
 
         // 将文件列表和行映射数据传递给 Webview
         htmlContent = htmlContent

@@ -129,7 +129,7 @@ export interface CheckingStrings {[key: string]: {active: boolean, type: string}
 export function getDefaultCheckingStrings(): CheckingStrings{
     return {
         "gl_FragColor": {active: false, type: "vec2"},
-        "iResolution": {active: false, type: "vec2"},
+        "iResolution": {active: false, type: "vec4"},
         "iTime": {active: false, type: "float"},
         "iTimeDelta": {active: false, type: "float"},
         "iMouse": {active: false, type: "vec4"},

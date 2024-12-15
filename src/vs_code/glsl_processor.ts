@@ -97,45 +97,51 @@ export function processChannel(
             replaceContent: `out vec4 FragColor;`,
         });
     }
-
+    
     // 处理从上面获取的每一个 #ichannel
     const reversedChannelFiles = [...channelFiles.entries()].reverse();
     for (const [uniformName, channelInfo] of reversedChannelFiles) {
         console.log(`Process channel: ${uniformName}`);
-        // 如果文件存在
-        if (fs.existsSync(channelInfo.path)){
-            // 获取文件的扩展名
-            const fileExtension = path.extname(channelInfo.path).toLowerCase();
-            //console.log(`File extension: ${fileExtension}`);
-                
-            // 根据文件类型处理
-            switch (fileExtension) {
-                case '.png':
-                case '.jpg':
-                case '.jpeg':
-                    console.log(`Processing image file: ${channelInfo.path}`);
-                    // 获取该文件在全局文件列表中的index
-                    let fileIndex = fileMap.get(channelInfo.path);
-                    // 如果文件在全局中未被添加过， 添加到全局
-                    if (fileIndex == undefined){
-                        fileIndex = fileMap.size;
-                        fileMap.set(channelInfo.path, fileIndex);
-                    }
-                    renderPassInfo.requiredTextures[uniformName] = fileIndex;
-                    insertLineMappings.push(channelInfo.lineMapping);
-                    break;
-                case '.glsl':
-                    let currentPassIndex = processChannel(channelInfo.path, fileMap, passMap, shaderData);
-                    renderPassInfo.requiredRenderPasses[uniformName] = currentPassIndex;
-                    insertLineMappings.push(channelInfo.lineMapping);
-                    break;
-                default:
-                    console.log(`Unsupported file type: ${fileExtension}`);
-                    break;
-            }
 
-        } else {
-            console.log(`Channel file not found: ${channelInfo.path}`);
+        const isLocalPath = !/^https?:\/\/\S+/.test(channelInfo.path);
+        if (isLocalPath){
+            // 使用 replace 方法替换"file://"
+            channelInfo.path = channelInfo.path.replace( /^\s*file\s*:\s*\/\s*\//i, '');
+            if (channelInfo.path.trim() === "self"){
+                channelInfo.path = filePath;
+            }else{
+                channelInfo.path = path.resolve(path.dirname(filePath), channelInfo.path);
+            }
+        }
+
+        // 获取文件的扩展名
+        const fileExtension = path.extname(channelInfo.path).toLowerCase();
+        //console.log(`File extension: ${fileExtension}`);
+            
+        // 根据文件类型处理
+        switch (fileExtension) {
+            case '.png':
+            case '.jpg':
+            case '.jpeg':
+                console.log(`Processing image file: ${channelInfo.path}`);
+                // 获取该文件在全局文件列表中的index
+                let fileIndex = fileMap.get(channelInfo.path);
+                // 如果文件在全局中未被添加过， 添加到全局
+                if (fileIndex == undefined){
+                    fileIndex = fileMap.size;
+                    fileMap.set(channelInfo.path, fileIndex);
+                }
+                renderPassInfo.requiredTextures[uniformName] = fileIndex;
+                insertLineMappings.push(channelInfo.lineMapping);
+                break;
+            case '.glsl':
+                let currentPassIndex = processChannel(channelInfo.path, fileMap, passMap, shaderData);
+                renderPassInfo.requiredRenderPasses[uniformName] = currentPassIndex;
+                insertLineMappings.push(channelInfo.lineMapping);
+                break;
+            default:
+                console.log(`Unsupported file type: ${fileExtension}`);
+                break;
         }
     }
 
@@ -310,7 +316,7 @@ function parseGLSL(
             const channelNumber = ichannelMatch[1];
             const customName = ichannelMatch[2];
             const uniformName = customName || `iChannel${channelNumber}`;
-            const ichannelPath = path.resolve(path.dirname(filePath), ichannelMatch[3]); // 获取文件路径
+            const ichannelPath = ichannelMatch[3]; // 获取文件路径
             iChannelFiles.set(
                 uniformName, 
                 {

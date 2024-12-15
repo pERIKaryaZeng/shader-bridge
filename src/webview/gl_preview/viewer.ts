@@ -52,7 +52,7 @@ export default class Viewer {
             `#version 300 es
             precision highp float;
             layout(location = 0) out vec4 fragColor;
-            uniform vec2 iResolution;
+            uniform vec4 iResolution;
             uniform sampler2D mainColor;
 
             void main() {
@@ -96,9 +96,6 @@ export default class Viewer {
                     uniformName: uniformName,
                     textureSource: currentFrameBuffer.createTextureReference(0),
                 };
-                console.log("ddddddddddddddddddddddddddddddddddddddddddddddd");
-                console.log("textureSourceInfo", textureSourceInfo);
-                console.log("sssssssssssssssssssssssssssssssssssssssssssss");
                 textureSourceInfos.push(textureSourceInfo);
             }
 

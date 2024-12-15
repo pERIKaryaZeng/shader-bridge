@@ -9,23 +9,32 @@ export function decodeBase64(encoded: string): string {
 
 // 移除单行和多行注释的辅助函数
 export function removeComments(content: string): string {
-    // 正则表达式
-    const singleLineComments = /\/\/.*$/gm; // 匹配单行注释
-    const multiLineComments = /\/\*[\s\S]*?\*\//g; // 匹配多行注释
-
-    // 替换单行注释为对应行的空白
-    const withoutSingleLineComments = content.replace(singleLineComments, (match) => {
-        return ''.padEnd(match.length, ' '); // 替换为等长的空格
+    // 匹配字符串字面量和注释
+    const pattern = /(["'`])(?:(?=(\\?))\2.)*?\1|\/\/.*$|\/\*[\s\S]*?\*\//gm;
+    
+    // 用于存放原始字符串字面量
+    const literals: string[] = [];
+    
+    // 替换字符串字面量和注释，字符串存入数组，注释替换为等长空白
+    content = content.replace(pattern, (match, quote) => {
+        if (quote) { // 是字符串字面量
+            literals.push(match);
+            return `___PLACEHOLDER___${literals.length - 1}___`;
+        } else { // 是注释
+            return match.startsWith('//') ? ''.padEnd(match.length, ' ') : match.split('\n').map(line => ''.padEnd(line.length, ' ')).join('\n');
+        }
     });
 
-    // 替换多行注释为等长度的空行或空白
-    const withoutMultiLineComments = withoutSingleLineComments.replace(multiLineComments, (match) => {
-        const lines = match.split('\n'); // 计算多行注释的行数
-        return lines.map((line) => ''.padEnd(line.length, ' ')).join('\n'); // 替换为对应的空白
+    // 将占位符替换回原始的字符串字面量
+    content = content.replace(/___PLACEHOLDER___(\d+)___/g, (_, index) => {
+        return literals[index];
     });
 
-    return withoutMultiLineComments;
+    //console.log("Final content:", content);
+
+    return content;
 }
+
 
 export function generateRandomId(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);

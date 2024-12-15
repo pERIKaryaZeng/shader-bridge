@@ -130,7 +130,7 @@ export default class RenderPass implements Pass {
 
         gl.useProgram(this.shaderProgram.get());
 
-        gl.uniform2f(this.uniformLocations.iResolution, size.width, size.height);
+        gl.uniform4f(this.uniformLocations.iResolution, size.width, size.height, 0.0, 0.0);
         gl.uniform1f(this.uniformLocations.iTime, frameState.time);
         gl.uniform1f(this.uniformLocations.iTimeDelta, frameState.timeDelta);
         gl.uniform4f(this.uniformLocations.iMouse, frameState.mouse.x, frameState.mouse.y, 0.0, 0.0);
