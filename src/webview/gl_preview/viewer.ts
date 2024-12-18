@@ -8,6 +8,7 @@ import DoubleFrameBuffer from './double_frame_buffer';
 import { TextureSourceInfo } from './texture_source';
 import Texture from './texture';
 import { getDefaultRenderPassInfo } from '../../vs_code/shader_data';
+import Stats from 'stats.js';
 
 export default class Viewer {
     private pipeline!: Pipeline;
@@ -19,6 +20,8 @@ export default class Viewer {
     private frameBuffers: IFrameBuffer[] = [];
     private paused: boolean = false; // 控制暂停状态
     private mouse: {x: number, y: number} = {x: 0, y: 0}; // 鼠标位置帧计数器
+    private stats: Stats = new Stats();
+    private compilePanel!: Stats.Panel;
 
     constructor(canvasId: string) {
         this.initializationPromise = this.initialize(canvasId);
@@ -33,8 +36,18 @@ export default class Viewer {
         } catch (error) {
             throw new Error("Failed to initialize WebGLContext: " + (error as Error).message);
         }
-
+        
+        this.initStats();
+        const startCompileTime = performance.now();
         this.initContent();
+        const compileTime = performance.now() - startCompileTime;
+        this.compilePanel.update(compileTime, compileTime);
+    }
+
+    private initStats(): void {
+        this.compilePanel = this.stats.addPanel(new Stats.Panel('CT', '#ff8', '#221')); // compile time
+        this.stats.showPanel(0);
+        document.body.appendChild(this.stats.dom);
     }
 
     private initContent(): void {
@@ -149,6 +162,7 @@ export default class Viewer {
         });
 
         this.pipeline.endFrame();
+        this.stats.update();
         requestAnimationFrame((ts) => this.loop(ts));
     }
 

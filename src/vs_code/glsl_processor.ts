@@ -284,7 +284,7 @@ function parseGLSL(
 
         // 检查是否有mainImage()
         if (!renderPassInfo.hasMainImage) {
-            const mainImageMatch = line.match(/void\s+mainImage\s*\(\s*out\s+vec4\s+\w+,\s*in\s+vec2\s+\w+\s*\)/);
+            const mainImageMatch = line.match(/void\s+mainImage\s*\(\s*out\s+vec4\s+\w+,\s*(in\s+)?vec2\s+\w+\s*\)/);
             if (mainImageMatch) {
                 console.log(`Found "mainImage" function declaration in file: ${filePath}, Line: ${i + 1}`);
                 renderPassInfo.hasMainImage = true;
