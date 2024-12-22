@@ -65,11 +65,11 @@ export default class Viewer {
             `#version 300 es
             precision highp float;
             layout(location = 0) out vec4 fragColor;
-            uniform vec4 iResolution;
+            uniform vec4 fragCoord;
             uniform sampler2D mainColor;
 
             void main() {
-                fragColor = texture(mainColor, gl_FragCoord.xy / iResolution.xy);
+                fragColor = texelFetch(mainColor,ivec2(gl_FragCoord.xy),0);
             }`;
 
 
@@ -80,11 +80,21 @@ export default class Viewer {
         for (let index = 0; index < renderPassInfos.length; index++) {
             const renderPassInfo = renderPassInfos[index];
 
+            let width: number, height: number;
+            if (renderPassInfo.configurableSettings.hasOwnProperty("resolution")){
+                const resolution = renderPassInfo.configurableSettings["resolution"];
+                width = Number(resolution[0]);
+                height = Number(resolution[1]);
+            }else{
+                width = this.gl.canvas.width;
+                height = this.gl.canvas.height;
+            }
+
             let frameBuffer: IFrameBuffer;
             if (renderPassInfo.isDoubleBuffering){
-                frameBuffer = new DoubleFrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
+                frameBuffer = new DoubleFrameBuffer(this.gl, width, height, 1);
             }else{
-                frameBuffer = new FrameBuffer(this.gl, this.gl.canvas.width, this.gl.canvas.height, 1);
+                frameBuffer = new FrameBuffer(this.gl, width, height, 1);
             }
 
             this.frameBuffers.push(frameBuffer);

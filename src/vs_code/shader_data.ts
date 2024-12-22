@@ -65,6 +65,7 @@ ShaderData{
     ]
 }
 */
+
 import Texture from "../webview/gl_preview/texture";
 
 export interface FileInfo {
@@ -99,6 +100,7 @@ export interface RenderPassInfo {
     hasMain: boolean;
     hasMainImage: boolean;
     isDoubleBuffering: boolean;
+    configurableSettings: ConfigurableSettings;
 }
 
 export function getDefaultRenderPassInfo(): RenderPassInfo{
@@ -114,7 +116,8 @@ export function getDefaultRenderPassInfo(): RenderPassInfo{
         definedOutput: false,
         hasMain: false,
         hasMainImage: false,
-        isDoubleBuffering: false
+        isDoubleBuffering: false,
+        configurableSettings: {}
     };
 }
 
@@ -143,3 +146,12 @@ export const checkingRegex = new RegExp(
         .join('|'),
     'g'
 );
+
+
+export interface DefinedConfigurableSettings {[key: string]: string[][]}
+export interface ConfigurableSettings {[key: string]: (string|number|boolean)[]}
+
+// 每个key可以有多个不同的parameter输入list
+export const definedConfigurableSettings: DefinedConfigurableSettings = {
+    "resolution": [["number", "number"]],
+};

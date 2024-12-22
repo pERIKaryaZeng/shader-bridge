@@ -10,12 +10,12 @@ let panel: vscode.WebviewPanel | undefined;
 
 export const showGLSLPreview = (context: vscode.ExtensionContext, uri: vscode.Uri) => {
     const mainfilePath = uri.fsPath;
-
+    
     const fileMap = new Map<string, number>();
     const passMap = new Map<string, number>();
     let shaderData: ShaderData = { fileInfos: [], renderPassInfos: [] };
     processChannel(mainfilePath, fileMap, passMap, shaderData);
-    console.log(fileMap);
+    console.log(fileMap); 
 
     // 动态维护允许的资源路径列表
     const dynamicRoots = new Set(fileMap.keys());

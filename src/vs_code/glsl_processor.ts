@@ -7,15 +7,154 @@ import {
     RenderPassInfo,
     ShaderData,
     LineMapping,
-    getDefaultRenderPassInfo
+    getDefaultRenderPassInfo,
+    definedConfigurableSettings,
 } from './shader_data';
+// Need to remove "type": "module" in @shaderfrog/glsl-parser/package.json
+// import { parser, generate, GlslSyntaxError } from '@shaderfrog/glsl-parser';
+// import { visit } from '@shaderfrog/glsl-parser/ast';
+// import { preprocess } from '@shaderfrog/glsl-parser/preprocessor';
+
+// export class GLSLProcessor {
+//     private filePath: string;
+
+//     constructor(filePath: string) {
+//         this.filePath = filePath;
+//     }
+
+//     private readGLSLFile(filePath: string): string {
+//         return fs.readFileSync(filePath, 'utf8');
+//     }
+
+//     public process(): void {
+//         // const options = {
+//         //     // Don't strip comments before preprocessing
+//         //     preserveComments: false,
+//         //     // Macro definitions to use when preprocessing
+//         //     defines: {},
+//         //     // A list of callbacks evaluated for each node type, and returns whether or not
+//         //     // this AST node is subject to preprocessing
+//         //     preserve: {}
+//         // };
+
+//         let error: GlslSyntaxError | undefined;
+//         try {
+
+//             // console.log(
+//             //     preprocess(`
+//             //     //#ddd
+//             //     float a = 1111111;
+//             //     #ifdef LIGHTS_ENABLED
+
+//             //         #define a 1
+//             //         float b = a;
+//             //     #else
+//             //         float c = sa;
+//             //     #endif
+//             //   `,
+//             //   options)
+//             // );
+    
+
+
+//             const src = this.readGLSLFile(this.filePath);
+//             const ast = parser.parse(src);
+
+
+
+    
+//             visit(ast, {
+//                 preprocessor: {
+//                     enter: (astPath: any) => {
+//                         console.log("Entering astPath: ", astPath);
+                        
+//                         const line = astPath.node.line;
+
+
+//                         // 优先匹配 #include 指令
+//                         const includeMatch = line.match(/^#include\s+["'](.+?)["']/);
+//                         if (includeMatch) {
+//                             let includeFilePath = includeMatch[1];
+//                             console.log('Preprocessing include: ', includeFilePath);
+
+//                             const isLocalPath = !/^https?:\/\/\S+/.test(includeFilePath);
+//                             if (isLocalPath){
+//                                 // 使用 replace 方法替换"file://"
+//                                 includeFilePath = includeFilePath.replace( /^\s*file\s*:\s*\/\s*\//i, '');
+//                                 if (includeFilePath.trim() === "self"){
+//                                     includeFilePath = this.filePath;
+//                                 }else{
+//                                     includeFilePath = path.resolve(path.dirname(this.filePath), includeFilePath);
+//                                 }
+//                             }
+                            
+//                             const includeSrc = this.readGLSLFile(includeFilePath);
+//                             const includeAst = parser.parse(includeSrc);
+//                             console.log('includeAst: ', includeAst);
+
+//                             // let includeNodes: any;
+//                             // visit(includeAst, {
+//                             //     program: {
+//                             //         enter: (astPath: any) => {
+//                             //             includeNodes = astPath.node;
+//                             //         },
+//                             //         exit: (astPath: any) => {},
+//                             //     }
+//                             // });
+
+//                             astPath.replaceWith(includeAst);
+
+//                             return;
+//                         }
+                       
+//                         // 匹配 #iChannel:uniformName "文件地址" 或 #iChannel{数字} "文件地址" (兼容shader toy)
+//                         const iChannelMatch = line.match(/^#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
+//                         if (iChannelMatch){
+//                             const channelNumber = iChannelMatch[1];
+//                             const customName = iChannelMatch[2];
+//                             const uniformName = customName || `iChannel${channelNumber}`;
+//                             console.log('Preprocessing iChannel with uniformName: ', uniformName);
+//                             return;
+//                         }
+                        
+//                         console.log('Unknown preprocessor: ', line);
+                        
+
+//                     },
+//                     exit: (astPath: any) => {
+//                         console.log("Exiting astPath: ", astPath);
+//                     },
+//                 }
+//             });
+
+            
+
+//             console.log(ast);
+//             //preprocessAst(ast);
+
+//             console.log(generate(ast));
+//         } catch (e) {
+//             error = e as GlslSyntaxError;
+//             console.log(error.name, ": ", error.message);
+//             console.log("At: ", error.location)
+//         }
+
+        
+//     }
+
+// }
+
 
 export function processChannel(
     filePath: string,
     fileMap: Map<string, number>,
     passMap: Map<string, number>,
     shaderData: ShaderData,
-): number {  
+): number {
+
+
+
+
     // 获取该pass在全局文件列表中的index
     let passIndex = passMap.get(filePath);
     // 如果pass在全局中被添加过， 则跳过
@@ -228,7 +367,7 @@ function parseGLSL(
         }
 
         // 匹配 precision 指令
-        const precisionMatch = line.match(/precision\s+(lowp|mediump|highp)\s+(float|int)\s*;/);
+        const precisionMatch = line.match(/^\s*precision\s+(lowp|mediump|highp)\s+(float|int)\s*;/);
         if (precisionMatch) {
             const precisionLevel = precisionMatch[1]; // lowp, mediump, or highp
             const dataType = precisionMatch[2]; // float or int
@@ -275,7 +414,7 @@ function parseGLSL(
 
         // 检查是否有main()
         if (!renderPassInfo.hasMain) {
-            const mainMatch = line.match(/void\s+main\s*\(\s*\)/);
+            const mainMatch = line.match(/^\s*void\s+main\s*\(\s*\)/);
             if (mainMatch) {
                 console.log(`Found "main" function declaration in file: ${filePath}, Line: ${i + 1}`);
                 renderPassInfo.hasMain = true;
@@ -284,7 +423,7 @@ function parseGLSL(
 
         // 检查是否有mainImage()
         if (!renderPassInfo.hasMainImage) {
-            const mainImageMatch = line.match(/void\s+mainImage\s*\(\s*out\s+vec4\s+\w+,\s*(in\s+)?vec2\s+\w+\s*\)/);
+            const mainImageMatch = line.match(/^\s*void\s+mainImage\s*\(\s*out\s+vec4\s+\w+,\s*(in\s+)?vec2\s+\w+\s*\)/);
             if (mainImageMatch) {
                 console.log(`Found "mainImage" function declaration in file: ${filePath}, Line: ${i + 1}`);
                 renderPassInfo.hasMainImage = true;
@@ -292,7 +431,7 @@ function parseGLSL(
         }
                 
         // 优先匹配 #include 指令
-        const includeMatch = line.match(/#include\s+["'](.+?)["']/);
+        const includeMatch = line.match(/^\s*#include\s+["'](.+?)["']/);
         if (includeMatch) {
             const includePath = path.resolve(path.dirname(filePath), includeMatch[1]);
 
@@ -311,7 +450,7 @@ function parseGLSL(
         }
 
         // 匹配 #iChannel:uniformName "文件地址" 或 #iChannel{数字} "文件地址" (兼容shader toy)
-        const ichannelMatch = line.match(/#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
+        const ichannelMatch = line.match(/^\s*#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
         if (ichannelMatch) {
             const channelNumber = ichannelMatch[1];
             const customName = ichannelMatch[2];
@@ -330,6 +469,44 @@ function parseGLSL(
                 }
             ); // 添加到 iChannelFiles Map
 
+            continue; // 处理完后直接跳到下一行
+        }
+
+        const setMatches = line.match(/^\s*#set\s+(.*)/);
+        if (setMatches) {
+            const content = setMatches[1].split(/\s+/);
+            const setName = content[0];
+            if (definedConfigurableSettings.hasOwnProperty(setName)) {
+                const parameterLists = definedConfigurableSettings[setName];
+                for (const parameterList of parameterLists) {
+                    if (parameterList.length === content.length - 1) {
+                        const typedParameterList: (string|number|boolean)[] = [];
+                        for (let index = 0; index < parameterList.length; index++) {
+                            const parameter = parameterList[index];
+                            const inputContent = content[index + 1];
+                            switch(parameter) {
+                                case "string":
+                                    typedParameterList.push(inputContent);
+                                    break;
+                                case "number":
+                                    let numberParameter = Number(inputContent);
+                                    if (isNaN(numberParameter)){
+                                        numberParameter = 0;
+                                    }
+                                    typedParameterList.push(numberParameter);
+                                    break;
+                                case "bool":
+                                    typedParameterList.push(Boolean(inputContent));
+                                    break;
+                                default:
+                                    throw new Error("Unknown parameter type: " + parameter);
+                            }
+                        }
+                        renderPassInfo.configurableSettings[setName] = typedParameterList;
+                        break;
+                    }
+                }
+            }
             continue; // 处理完后直接跳到下一行
         }
 
