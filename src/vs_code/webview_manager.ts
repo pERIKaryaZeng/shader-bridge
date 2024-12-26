@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { encodeBase64 } from './string_tools';
-import { processChannel } from './glsl_processor';
+import { processChannel, GLSLProcessor } from './glsl_processor';
 import { ShaderData } from './shader_data';
 
 // 用于存储 WebviewPanel 的全局变量
@@ -11,6 +11,9 @@ let panel: vscode.WebviewPanel | undefined;
 export const showGLSLPreview = (context: vscode.ExtensionContext, uri: vscode.Uri) => {
     const mainfilePath = uri.fsPath;
     
+    const glslProcessor = new GLSLProcessor(mainfilePath);
+    glslProcessor.process();
+
     const fileMap = new Map<string, number>();
     const passMap = new Map<string, number>();
     let shaderData: ShaderData = { fileInfos: [], renderPassInfos: [] };

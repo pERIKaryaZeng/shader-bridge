@@ -11,138 +11,276 @@ import {
     definedConfigurableSettings,
 } from './shader_data';
 // Need to remove "type": "module" in @shaderfrog/glsl-parser/package.json
-// import { parser, generate, GlslSyntaxError } from '@shaderfrog/glsl-parser';
-// import { visit } from '@shaderfrog/glsl-parser/ast';
-// import { preprocess } from '@shaderfrog/glsl-parser/preprocessor';
+//import { parser, generate, GlslSyntaxError } from '@shaderfrog/glsl-parser';
+import { GlslSyntaxError } from '@shaderfrog/glsl-parser';
+import { visit } from '@shaderfrog/glsl-parser/ast';
+//import { preprocess } from '@shaderfrog/glsl-parser/preprocessor';
+import {
+    preprocessAst,
+    preprocessComments,
+    generate,
+    parser,
+} from '@shaderfrog/glsl-parser/preprocessor';
+import { console } from 'inspector';
 
-// export class GLSLProcessor {
-//     private filePath: string;
 
-//     constructor(filePath: string) {
-//         this.filePath = filePath;
-//     }
+const customPreprocessor = {
+    include: {
+        
+    },
 
-//     private readGLSLFile(filePath: string): string {
-//         return fs.readFileSync(filePath, 'utf8');
-//     }
 
-//     public process(): void {
-//         // const options = {
-//         //     // Don't strip comments before preprocessing
-//         //     preserveComments: false,
-//         //     // Macro definitions to use when preprocessing
-//         //     defines: {},
-//         //     // A list of callbacks evaluated for each node type, and returns whether or not
-//         //     // this AST node is subject to preprocessing
-//         //     preserve: {}
-//         // };
+};
 
-//         let error: GlslSyntaxError | undefined;
-//         try {
+export class GLSLProcessor {
+    private filePath: string;
 
-//             // console.log(
-//             //     preprocess(`
-//             //     //#ddd
-//             //     float a = 1111111;
-//             //     #ifdef LIGHTS_ENABLED
+    constructor(filePath: string) {
+        this.filePath = filePath;
+    }
 
-//             //         #define a 1
-//             //         float b = a;
-//             //     #else
-//             //         float c = sa;
-//             //     #endif
-//             //   `,
-//             //   options)
-//             // );
+    private readGLSLFile(filePath: string): string {
+        return fs.readFileSync(filePath, 'utf8');
+    }
+
+    private addLineMappingComments(commentsRemovedSrc: string): string {
+        // 将代码分割为行
+        const lines = commentsRemovedSrc.split("\n");
+
+
+        const processedLines:string[] = [];
+
+        let preprocessorLine = "";
+        // 遍历每一行并添加注释
+        for (let index = 0; index < lines.length; index++){
+            const line = lines[index];
+            const trimStartLine = line.trimStart();
+            if (trimStartLine.startsWith("#") || preprocessorLine != "") {
+                const trimedEndLine = line.trimEnd();
+                if (trimedEndLine.endsWith("\\")){
+                    preprocessorLine += trimedEndLine.slice(0, -1);
+                }else{
+                    processedLines.push(`${preprocessorLine + line}`);
+                    preprocessorLine = "";
+                }
+            }else {
+                processedLines.push(`${line} //0:${index + 1}`);
+            }
+        };
+
+        // 将处理后的行重新组合为字符串
+        return processedLines.join("\n");
+    }
+
+    public visitAst(astObj: any, callback: (astObj: any) => void): void {
+        if (Array.isArray(astObj)) {
+            // 如果是数组，递归遍历每个元素
+            for (const item of astObj) {
+                this.visitAst(item, callback);
+            }
+        } else if (typeof astObj === "object" && astObj !== null) {
+            // 调用回调函数处理对象
+            callback(astObj);
+    
+            // 遍历对象的每个键值对
+            for (const key in astObj) {
+                if (astObj.hasOwnProperty(key)) {
+                    this.visitAst(astObj[key], callback);
+                }
+            }
+        }
+    }
+
+    public processLineMappings(astObj: any): void {
+        this.visitAst(astObj, (astObj) => {
+            if ("text" in astObj) {
+                console.log("find text: "); // 打印 text 的值
+                console.log(astObj.text); // 打印 text 的值
+
+                const lines = astObj.text.split("\n"); // 按行分割字符串
+                const textLines: {text: string, lineMapping: {fileIndex: number, lineIndex: number}}[] = [];
+            
+                const regex = /\/\/(\d+):(\d+)$/; // 匹配 //int:int 格式
+            
+                for (const line of lines) {
+                    const match = line.match(regex); // 检查是否匹配注释格式
+                    if (match) {
+                        const fileIndex = parseInt(match[1], 10); // 提取第一个整数
+                        const lineIndex = parseInt(match[2], 10); // 提取第二个整数
+                        textLines.push({
+                            text: line.replace(regex, "").trimEnd(), // 去除注释并去掉末尾多余空格
+                            lineMapping: {fileIndex, lineIndex}}
+                        );
+                    }
+                }
+
+                astObj.textLines = textLines;
+            }
+        });
+    }
+    
+    public generateFileAndMapping(astObj: any): {file: string, lineMappings: {fileIndex: number, lineIndex: number}[]} {
+        let file = "";
+        const lineMappings: {fileIndex: number, lineIndex: number}[] = [];
+        this.visitAst(astObj, (astObj) => {
+            if ("textLines" in astObj) {
+                for (const textLine of astObj.textLines) {
+                    file += textLine.text + "\n";
+                    lineMappings.push(textLine.lineMapping);
+                }
+            }
+        });
+        return {
+            file: file,
+            lineMappings: lineMappings
+        };
+    }
     
 
+    public process(): void {
+        // const options = {
+        //     // Don't strip comments before preprocessing
+        //     preserveComments: false,
+        //     // Macro definitions to use when preprocessing
+        //     defines: {},
+        //     // A list of callbacks evaluated for each node type, and returns whether or not
+        //     // this AST node is subject to preprocessing
+        //     preserve: {}
+        // };
 
-//             const src = this.readGLSLFile(this.filePath);
-//             const ast = parser.parse(src);
+        let error: GlslSyntaxError | undefined;
+        try {
+
+            // console.log(
+            //     preprocess(`
+            //     //#ddd
+            //     float a = 1111111;
+            //     #ifdef LIGHTS_ENABLED
+
+            //         #define a 1
+            //         float b = a;
+            //     #else
+            //         float c = sa;
+            //     #endif
+            //   `,
+            //   options)
+            // );
+    
+            const src = this.readGLSLFile(this.filePath);
+            const commentsRemovedSrc = preprocessComments(src);
+            console.log(commentsRemovedSrc);
+            const commentedSrc = this.addLineMappingComments(commentsRemovedSrc);
+            console.log(commentedSrc);
+            const ast = parser.parse(commentedSrc);
+            this.processLineMappings(ast);
+            preprocessAst(ast);
+            console.log(ast);
+            const {file: preprocessSrc, lineMappings: lineMappings} = this.generateFileAndMapping(ast);
+            console.log(preprocessSrc);
+            console.log(lineMappings);
+
+            // const src = this.readGLSLFile(this.filePath);
+            // const commentsRemovedSrc = preprocessComments(src);
+            // console.log(commentsRemovedSrc);
+            // const ast = parser.parse(commentsRemovedSrc);
+            // //this.processLineMappings(ast);
+            // preprocessAst(ast);
+            // console.log(ast);
+            // console.log(generate(ast));
+
+
+
+
+            //const preprocessed = generate(ast);
+            //console.log(preprocessed);
+
+            //console.log(generate(ast));
+
+            //const ast = parser.parse(src);
 
 
 
     
-//             visit(ast, {
-//                 preprocessor: {
-//                     enter: (astPath: any) => {
-//                         console.log("Entering astPath: ", astPath);
+            // visit(ast, {
+            //     preprocessor: {
+            //         enter: (astPath: any) => {
+            //             console.log("Entering astPath: ", astPath);
                         
-//                         const line = astPath.node.line;
+            //             const line = astPath.node.line;
 
 
-//                         // 优先匹配 #include 指令
-//                         const includeMatch = line.match(/^#include\s+["'](.+?)["']/);
-//                         if (includeMatch) {
-//                             let includeFilePath = includeMatch[1];
-//                             console.log('Preprocessing include: ', includeFilePath);
+            //             // 优先匹配 #include 指令
+            //             const includeMatch = line.match(/^#include\s+["'](.+?)["']/);
+            //             if (includeMatch) {
+            //                 let includeFilePath = includeMatch[1];
+            //                 console.log('Preprocessing include: ', includeFilePath);
 
-//                             const isLocalPath = !/^https?:\/\/\S+/.test(includeFilePath);
-//                             if (isLocalPath){
-//                                 // 使用 replace 方法替换"file://"
-//                                 includeFilePath = includeFilePath.replace( /^\s*file\s*:\s*\/\s*\//i, '');
-//                                 if (includeFilePath.trim() === "self"){
-//                                     includeFilePath = this.filePath;
-//                                 }else{
-//                                     includeFilePath = path.resolve(path.dirname(this.filePath), includeFilePath);
-//                                 }
-//                             }
+            //                 const isLocalPath = !/^https?:\/\/\S+/.test(includeFilePath);
+            //                 if (isLocalPath){
+            //                     // 使用 replace 方法替换"file://"
+            //                     includeFilePath = includeFilePath.replace( /^\s*file\s*:\s*\/\s*\//i, '');
+            //                     if (includeFilePath.trim() === "self"){
+            //                         includeFilePath = this.filePath;
+            //                     }else{
+            //                         includeFilePath = path.resolve(path.dirname(this.filePath), includeFilePath);
+            //                     }
+            //                 }
                             
-//                             const includeSrc = this.readGLSLFile(includeFilePath);
-//                             const includeAst = parser.parse(includeSrc);
-//                             console.log('includeAst: ', includeAst);
+            //                 const includeSrc = this.readGLSLFile(includeFilePath);
+            //                 const includeAst = parser.parse(includeSrc);
+            //                 console.log('includeAst: ', includeAst);
 
-//                             // let includeNodes: any;
-//                             // visit(includeAst, {
-//                             //     program: {
-//                             //         enter: (astPath: any) => {
-//                             //             includeNodes = astPath.node;
-//                             //         },
-//                             //         exit: (astPath: any) => {},
-//                             //     }
-//                             // });
+            //                 // let includeNodes: any;
+            //                 // visit(includeAst, {
+            //                 //     program: {
+            //                 //         enter: (astPath: any) => {
+            //                 //             includeNodes = astPath.node;
+            //                 //         },
+            //                 //         exit: (astPath: any) => {},
+            //                 //     }
+            //                 // });
 
-//                             astPath.replaceWith(includeAst);
+            //                 astPath.replaceWith(includeAst);
 
-//                             return;
-//                         }
+            //                 return;
+            //             }
                        
-//                         // 匹配 #iChannel:uniformName "文件地址" 或 #iChannel{数字} "文件地址" (兼容shader toy)
-//                         const iChannelMatch = line.match(/^#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
-//                         if (iChannelMatch){
-//                             const channelNumber = iChannelMatch[1];
-//                             const customName = iChannelMatch[2];
-//                             const uniformName = customName || `iChannel${channelNumber}`;
-//                             console.log('Preprocessing iChannel with uniformName: ', uniformName);
-//                             return;
-//                         }
+            //             // 匹配 #iChannel:uniformName "文件地址" 或 #iChannel{数字} "文件地址" (兼容shader toy)
+            //             const iChannelMatch = line.match(/^#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
+            //             if (iChannelMatch){
+            //                 const channelNumber = iChannelMatch[1];
+            //                 const customName = iChannelMatch[2];
+            //                 const uniformName = customName || `iChannel${channelNumber}`;
+            //                 console.log('Preprocessing iChannel with uniformName: ', uniformName);
+            //                 return;
+            //             }
                         
-//                         console.log('Unknown preprocessor: ', line);
+            //             console.log('Unknown preprocessor: ', line);
                         
 
-//                     },
-//                     exit: (astPath: any) => {
-//                         console.log("Exiting astPath: ", astPath);
-//                     },
-//                 }
-//             });
+            //         },
+            //         exit: (astPath: any) => {
+            //             console.log("Exiting astPath: ", astPath);
+            //         },
+            //     }
+            // });
 
             
 
-//             console.log(ast);
-//             //preprocessAst(ast);
+            //console.log(ast);
+            //preprocessAst(ast);
 
-//             console.log(generate(ast));
-//         } catch (e) {
-//             error = e as GlslSyntaxError;
-//             console.log(error.name, ": ", error.message);
-//             console.log("At: ", error.location)
-//         }
+            //console.log(generate(ast));
+        } catch (e) {
+            error = e as GlslSyntaxError;
+            console.log(error.name, ": ", error.message);
+            console.log("At: ", error.location)
+        }
 
         
-//     }
+    }
 
-// }
+}
 
 
 export function processChannel(
