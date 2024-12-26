@@ -14,7 +14,7 @@ declare function acquireVsCodeApi(): any;
             const target = (event.target as HTMLElement)?.closest('.file-link') as HTMLElement | null;
             if (target) {
                 event.preventDefault();
-
+                
                 const filePath = target.getAttribute('data-file-path');
                 const lineNumber = parseInt(target.getAttribute('data-line-number') || '', 10);
 

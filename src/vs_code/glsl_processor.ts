@@ -152,9 +152,6 @@ export function processChannel(
     shaderData: ShaderData,
 ): number {
 
-
-
-
     // 获取该pass在全局文件列表中的index
     let passIndex = passMap.get(filePath);
     // 如果pass在全局中被添加过， 则跳过
@@ -478,10 +475,12 @@ function parseGLSL(
             const setName = content[0];
             if (definedConfigurableSettings.hasOwnProperty(setName)) {
                 const parameterLists = definedConfigurableSettings[setName];
+                console.log(`Found #set ${setName}`);
                 for (const parameterList of parameterLists) {
                     if (parameterList.length === content.length - 1) {
                         const typedParameterList: (string|number|boolean)[] = [];
-                        for (let index = 0; index < parameterList.length; index++) {
+                        let passed = true;
+                        for (let index = 0; index < parameterList.length && passed; index++) {
                             const parameter = parameterList[index];
                             const inputContent = content[index + 1];
                             switch(parameter) {
@@ -499,11 +498,18 @@ function parseGLSL(
                                     typedParameterList.push(Boolean(inputContent));
                                     break;
                                 default:
-                                    throw new Error("Unknown parameter type: " + parameter);
+                                    if (parameter == inputContent.toLowerCase()){
+                                        typedParameterList.push(parameter);
+                                        break;
+                                    }
+                                    passed = false;
+                                    //console.log("Unknown parameter type: " + parameter);
                             }
                         }
-                        renderPassInfo.configurableSettings[setName] = typedParameterList;
-                        break;
+                        if (passed) {
+                            renderPassInfo.configurableSettings[setName] = typedParameterList;
+                            break; 
+                        }
                     }
                 }
             }

@@ -1,6 +1,8 @@
 import { TextureSource } from "./texture_source";
+import Expression from '../../vs_code/expression';
 
 export interface IFrameBuffer {
+    getTextureType(): number;
     get(): WebGLFramebuffer | null;
     getSize(): { width: number; height: number };
     resize(newWidth: number, newHeight: number): void;
@@ -14,26 +16,57 @@ export interface IFrameBuffer {
 }
 
 export class FrameBuffer implements IFrameBuffer{
-    private gl: WebGL2RenderingContext; // 更新为 WebGL2RenderingContext
+    private gl: WebGL2RenderingContext;
     private glFrameBuffer: WebGLFramebuffer | null;
     private glTextures: WebGLTexture[];
-    //private glRenderBuffer: WebGLRenderbuffer | null;
-    private width: number;
-    private height: number;
+    private width: Expression;
+    private height: Expression;
     private outputNumber: number;
+    private isCubeMap: boolean;
+    private textureWrapS: number;
+    private textureWrapT: number;
+    private textureWrapR: number;
+    private textureMinFilter: number;
+    private textureMagFilter: number;
 
-    constructor(gl: WebGL2RenderingContext, width: number, height: number, outputNumber: number) {
+    constructor(
+        gl: WebGL2RenderingContext,
+        width: Expression,
+        height: Expression,
+        textureWrapS: number,
+        textureWrapT: number,
+        textureWrapR: number,
+        textureMinFilter: number,
+        textureMagFilter: number,
+        outputNumber: number,
+        isCubeMap: boolean = false
+    ) {
         this.gl = gl;
-        this.width = width;
-        this.height = height;
         this.outputNumber = outputNumber;
+        this.isCubeMap = isCubeMap;
+        this.width = width;
+        if (this.isCubeMap){
+            this.height = width;
+        }else{
+            this.height = height;
+        }
+        this.textureWrapS = textureWrapS;
+        this.textureWrapT = textureWrapT;
+        this.textureWrapR = textureWrapR;
+        this.textureMinFilter = textureMinFilter;
+        this.textureMagFilter = textureMagFilter;
+
+
 
         this.glFrameBuffer = gl.createFramebuffer();
         if (!this.glFrameBuffer) throw new Error("Failed to create framebuffer");
 
         this.glTextures = this.createTextures();
         this.attachResources();
-        //this.glRenderBuffer = this.createRenderbuffer(width, height);
+    }
+
+    public getTextureType(): number {
+        return this.isCubeMap ? this.gl.TEXTURE_CUBE_MAP : this.gl.TEXTURE_2D;
     }
 
     public get(): WebGLFramebuffer | null {
@@ -41,7 +74,7 @@ export class FrameBuffer implements IFrameBuffer{
     }
 
     public getSize(): { width: number; height: number } {
-        return { width: this.width, height: this.height };
+        return { width: this.width.get(), height: this.height.get() };
     }
 
     private createTextures(): WebGLTexture[] {
@@ -50,31 +83,31 @@ export class FrameBuffer implements IFrameBuffer{
             const texture = this.gl.createTexture();
             if (!texture) throw new Error(`Failed to create texture for output ${i}`);
 
-            this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
-
-            // 使用 texStorage2D 提高性能
-            this.gl.texStorage2D(this.gl.TEXTURE_2D, 1, this.gl.RGBA8, this.width, this.height);
-
-            // 设置纹理参数
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+            if (this.isCubeMap){
+                this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, texture);
+                // 使用 texStorage2D 提高性能
+                this.gl.texStorage2D(this.gl.TEXTURE_CUBE_MAP, 1, this.gl.RGBA8, this.width.get(), this.height.get());
+                // 设置纹理参数
+                this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_WRAP_S, this.textureWrapS);
+                this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_WRAP_T, this.textureWrapT);
+                this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_WRAP_R, this.textureWrapR);
+                this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_MIN_FILTER, this.textureMinFilter);
+                this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_MAG_FILTER, this.textureMagFilter);
+            }else{
+                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+                // 使用 texStorage2D 提高性能
+                this.gl.texStorage2D(this.gl.TEXTURE_2D, 1, this.gl.RGBA8, this.width.get(), this.height.get());
+                // 设置纹理参数
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.textureWrapS);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.textureWrapT);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.textureMinFilter);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.textureMagFilter);
+            }
 
             textures.push(texture);
         }
         return textures;
     }
-
-    // private createRenderbuffer(width: number, height: number): WebGLRenderbuffer | null {
-    //     const renderbuffer = this.gl.createRenderbuffer();
-    //     if (!renderbuffer) return null;
-
-    //     this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, renderbuffer);
-    //     this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, width, height);
-
-    //     return renderbuffer;
-    // }
 
     private attachResources(): void {
         if (!this.glFrameBuffer) throw new Error("Failed to create frameBuffer");
@@ -84,29 +117,36 @@ export class FrameBuffer implements IFrameBuffer{
         this.bind();
 
         const drawBuffers: number[] = [];
-        for (let i = 0; i < this.outputNumber; i++) {
-            gl.framebufferTexture2D(
-                gl.FRAMEBUFFER,
-                gl.COLOR_ATTACHMENT0 + i,
-                gl.TEXTURE_2D,
-                this.glTextures[i],
-                0
-            );
-            drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
+
+
+        if (this.isCubeMap) {
+            for (let i = 0; i < this.outputNumber; i++) {
+                for (let face = 0; face < 6; face++) {
+                    gl.framebufferTexture2D(
+                        gl.FRAMEBUFFER,
+                        gl.COLOR_ATTACHMENT0 + i,
+                        gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                        this.glTextures[i],
+                        0
+                    );
+                }
+                drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
+            }
+        } else {
+            for (let i = 0; i < this.outputNumber; i++) {
+                gl.framebufferTexture2D(
+                    gl.FRAMEBUFFER,
+                    gl.COLOR_ATTACHMENT0 + i,
+                    gl.TEXTURE_2D,
+                    this.glTextures[i],
+                    0
+                );
+                drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
+            }
         }
 
         // 使用 WebGL 2.0 的内置 drawBuffers
         gl.drawBuffers(drawBuffers);
-
-        // // 可选：为深度缓冲区附加 renderbuffer
-        // if (this.glRenderBuffer) {
-        //     gl.framebufferRenderbuffer(
-        //         gl.FRAMEBUFFER,
-        //         gl.DEPTH_ATTACHMENT,
-        //         gl.RENDERBUFFER,
-        //         this.glRenderBuffer
-        //     );
-        // }
 
         // 检查帧缓冲区完整性
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
@@ -119,35 +159,33 @@ export class FrameBuffer implements IFrameBuffer{
     }
 
     public resize(newWidth: number, newHeight: number): void {
-        // if (this.width === newWidth && this.height === newHeight) {
-        //     // 如果分辨率未变化，直接返回
-        //     return;
-        // }
-    
-        this.width = newWidth;
-        this.height = newHeight;
-
-
+        const content = {vw: newWidth, vh: newHeight};
+        this.width.update(content);
+        this.height.update(content);
     
         const gl = this.gl;
     
         // 删除旧资源
         this.glTextures.forEach((texture) => gl.deleteTexture(texture));
-        // if (this.glRenderBuffer) {
-        //     gl.deleteRenderbuffer(this.glRenderBuffer);
-        // }
 
         // 重新创建纹理
         this.glTextures = this.createTextures();
         // 重新绑定所有资源
         this.attachResources();
-    
-        //// 重新创建渲染缓冲区
-        //this.glRenderBuffer = this.createRenderbuffer(newWidth, newHeight);
     }
 
     public bind(): void {
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.glFrameBuffer);
+
+        if (this.isCubeMap) {
+            this.gl.framebufferTexture2D(
+                this.gl.FRAMEBUFFER,
+                this.gl.COLOR_ATTACHMENT0 + 0,
+                this.gl.TEXTURE_CUBE_MAP_POSITIVE_X + 0,
+                this.glTextures[0],
+                0
+            );
+        }
     }
 
     public unbind(): void {
@@ -160,23 +198,34 @@ export class FrameBuffer implements IFrameBuffer{
         if (!this.glFrameBuffer) throw new Error("Framebuffer is not initialized");
     
         this.bind();
-    
-        // 遍历每个纹理并清空
-        for (let i = 0; i < this.outputNumber; i++) {
-            // 设置清除颜色
-            gl.clearColor(...clearColor);
-    
-            // 附加当前纹理为渲染目标
-            gl.framebufferTexture2D(
-                gl.FRAMEBUFFER,
-                gl.COLOR_ATTACHMENT0 + i,
-                gl.TEXTURE_2D,
-                this.glTextures[i],
-                0
-            );
-    
-            // 清除当前附件
-            gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.clearColor(...clearColor);
+
+        if (this.isCubeMap) {
+            // 清除每个面的立方体贴图
+            for (let i = 0; i < this.outputNumber; i++) {
+                for (let face = 0; face < 6; face++) {
+                    gl.framebufferTexture2D(
+                        gl.FRAMEBUFFER,
+                        gl.COLOR_ATTACHMENT0 + i,
+                        gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                        this.glTextures[i],
+                        0
+                    );
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                }
+            }
+        } else {
+            // 清除每个普通的二维纹理
+            for (let i = 0; i < this.outputNumber; i++) {
+                gl.framebufferTexture2D(
+                    gl.FRAMEBUFFER,
+                    gl.COLOR_ATTACHMENT0 + i,
+                    gl.TEXTURE_2D,
+                    this.glTextures[i],
+                    0
+                );
+                gl.clear(gl.COLOR_BUFFER_BIT);
+            }
         }
     
         this.unbind();
@@ -200,11 +249,9 @@ export class FrameBuffer implements IFrameBuffer{
 
         if (this.glFrameBuffer) gl.deleteFramebuffer(this.glFrameBuffer);
         this.glTextures.forEach((texture) => gl.deleteTexture(texture));
-        //if (this.glRenderBuffer) gl.deleteRenderbuffer(this.glRenderBuffer);
 
         this.glFrameBuffer = null;
         this.glTextures = [];
-        //this.glRenderBuffer = null;
     }
 }
 
@@ -218,6 +265,10 @@ export class FrameBufferTextureReference implements TextureSource {
 
     public getTexture(): WebGLTexture {
         return this.frameBuffer.getTexture(this.textureIndex);
+    }
+
+    public getTextureType(): number {
+        return this.frameBuffer.getTextureType();
     }
 
 }

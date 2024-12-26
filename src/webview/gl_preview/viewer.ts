@@ -8,6 +8,7 @@ import DoubleFrameBuffer from './double_frame_buffer';
 import { TextureSourceInfo } from './texture_source';
 import Texture from './texture';
 import { getDefaultRenderPassInfo } from '../../vs_code/shader_data';
+import Expression from '../../vs_code/expression';
 import Stats from 'stats.js';
 
 export default class Viewer {
@@ -72,29 +73,144 @@ export default class Viewer {
                 fragColor = texelFetch(mainColor,ivec2(gl_FragCoord.xy),0);
             }`;
 
+        const cubeMapFragmentShaderSource = 
+            `#version 300 es
+            precision highp float;
+            layout(location = 0) out vec4 fragColor;
+            uniform vec4 fragCoord;
+            uniform vec4 iResolution;
+            uniform samplerCube mainColor;
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / iResolution.xy;
+
+                // 计算当前像素所在的列和行
+                int col = int(uv.x * 3.0); // 乘以列数 3
+                int row = int(uv.y * 2.0); // 乘以行数 2
+                int faceIndex = col * 2 + row % 2;
+
+                // 修改UV映射到每个区域的1/3宽度和1/2高度
+                uv.x = fract(uv.x * 3.0);
+                uv.y = fract(uv.y * 2.0);
+
+                vec3 position[6] = vec3[](
+                    vec3(-1.0, -uv.y, uv.x),
+                    vec3(1.0, -uv.y, -uv.x),
+                    vec3(uv.x, -1.0, -uv.y),
+                    vec3(uv.x, 1.0, uv.y),
+                    vec3(-uv.x, -uv.y, -1.0),
+                    vec3(uv.x, -uv.y, 1.0)
+                );
+
+                vec3 rayDir = normalize(position[faceIndex]);
+                fragColor = texture(mainColor, rayDir);
+            }`;
 
         const passes: RenderPass[] = [];
         const renderPassInfos = this.webglContext.shaderData.renderPassInfos;
-        //this.webglContext.shaderData.renderPassInfos.forEach((renderPassInfo, index, array) => {
 
         for (let index = 0; index < renderPassInfos.length; index++) {
             const renderPassInfo = renderPassInfos[index];
 
-            let width: number, height: number;
+            let textureWrapSStr: string = "";
+            let textureWrapTStr: string = "";
+            let textureWrapRStr: string = "";
+            let textureMinFilterStr: string = "";
+            let textureMagFilterStr: string = "";
+            let widthStr: string = "vw";
+            let heightStr: string = "vh";
+            let isCubeMap = false;
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_type")){
+                isCubeMap = renderPassInfo.configurableSettings["texture_type"][0] == "texture_cube_map";
+            }
+            
+            if (isCubeMap){
+                heightStr = widthStr;
+                textureWrapSStr = "clamp_to_edge";
+                textureWrapTStr = "clamp_to_edge";
+                textureWrapRStr = "clamp_to_edge";
+            }
+            
             if (renderPassInfo.configurableSettings.hasOwnProperty("resolution")){
                 const resolution = renderPassInfo.configurableSettings["resolution"];
-                width = Number(resolution[0]);
-                height = Number(resolution[1]);
-            }else{
-                width = this.gl.canvas.width;
-                height = this.gl.canvas.height;
+                widthStr = String(resolution[0]);
+                if (resolution.length <= 1 || resolution[1] == ""){
+                    heightStr = widthStr;
+                }else{
+                    heightStr = String(resolution[1]);
+                }
             }
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_wrap")){
+                const textureWrapStr = String(renderPassInfo.configurableSettings["texture_wrap"][0]);
+                textureWrapSStr = textureWrapStr;
+                textureWrapTStr = textureWrapStr;
+                textureWrapRStr = textureWrapStr;
+            }
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_wrap_s")){
+                textureWrapSStr = String(renderPassInfo.configurableSettings["texture_wrap_s"][0]);
+            }
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_wrap_t")){
+                textureWrapTStr = String(renderPassInfo.configurableSettings["texture_wrap_t"][0]);
+            }
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_wrap_r")){
+                textureWrapRStr = String(renderPassInfo.configurableSettings["texture_wrap_r"][0]);
+            }
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_filter")){
+                const textureFilterStr = String(renderPassInfo.configurableSettings["texture_filter"][0]);
+                textureMinFilterStr = textureFilterStr;
+                textureMagFilterStr = textureFilterStr;
+            }
+            
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_min_filter")){
+                textureMinFilterStr = String(renderPassInfo.configurableSettings["texture_min_filter"][0]);
+            }
+
+            if (renderPassInfo.configurableSettings.hasOwnProperty("texture_mag_filter")){
+                textureMagFilterStr = String(renderPassInfo.configurableSettings["texture_mag_filter"][0]);
+            }
+
+            const content = {vw: this.gl.canvas.width, vh: this.gl.canvas.height};
+            const width = new Expression(widthStr, content);
+            const height = new Expression(heightStr, content);
+            const textureWrapS: number = this.getTextureWrap(textureWrapSStr);
+            const textureWrapT: number = this.getTextureWrap(textureWrapTStr);
+            const textureWrapR: number = this.getTextureWrap(textureWrapRStr);
+            const textureMinFilter: number = this.getTextureFilter(textureMinFilterStr);
+            const textureMagFilter: number = this.getTextureFilter(textureMagFilterStr);
 
             let frameBuffer: IFrameBuffer;
             if (renderPassInfo.isDoubleBuffering){
-                frameBuffer = new DoubleFrameBuffer(this.gl, width, height, 1);
+                frameBuffer = new DoubleFrameBuffer(
+                    this.gl,
+                    width,
+                    height,
+                    textureWrapS,
+                    textureWrapT,
+                    textureWrapR,
+                    textureMinFilter,
+                    textureMagFilter,
+                    1,
+                    isCubeMap
+                );
             }else{
-                frameBuffer = new FrameBuffer(this.gl, width, height, 1);
+                frameBuffer = new FrameBuffer(
+                    this.gl,
+                    width,
+                    height,
+                    textureWrapS,
+                    textureWrapT,
+                    textureWrapR,
+                    textureMinFilter,
+                    textureMagFilter,
+                    1,
+                    isCubeMap
+                );
             }
 
             this.frameBuffers.push(frameBuffer);
@@ -138,11 +254,16 @@ export default class Viewer {
         };
 
 
+        const displayFbo = passes[passes.length - 1].getFrameBuffer();
 
+        let isCubeMap = false;
+        if (displayFbo != null) {
+            isCubeMap = displayFbo.getTextureType() == this.gl.TEXTURE_CUBE_MAP;
+        }
 
         // 最后一个pass用于渲染到屏幕上
         const vertexShader = new Shader(this.webglContext, this.gl.VERTEX_SHADER, vertexShaderSource);
-        const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const fragmentShader = new Shader(this.webglContext, this.gl.FRAGMENT_SHADER, isCubeMap ? cubeMapFragmentShaderSource: fragmentShaderSource);
         const shaderProgram = new ShaderProgram(this.gl, vertexShader, fragmentShader);
         const renderPassInfo = getDefaultRenderPassInfo();
         renderPassInfo.stringsToCheck["iResolution"].active = true;
@@ -155,6 +276,31 @@ export default class Viewer {
         
         console.log("Viewer initialized successfully.");
     }
+
+    public getTextureWrap(textureWrapStr: string): number {
+        switch (textureWrapStr){
+            case "repeat":
+                return this.gl.REPEAT;
+            case "mirrored_repeat":
+                return this.gl.MIRRORED_REPEAT;
+            case "clamp_to_edge":
+                return this.gl.CLAMP_TO_EDGE;
+            default:
+                return this.gl.REPEAT;
+        }
+    }
+
+    public getTextureFilter(textureFilterStr: string): number {
+        switch (textureFilterStr){
+            case "nearest":
+                return this.gl.NEAREST;
+            case "linear":
+                return this.gl.LINEAR;
+            default:
+                return this.gl.LINEAR;
+        }
+    }
+
 
     private loop(timestamp: number): void {
         if (!this.startTime) this.startTime = timestamp;

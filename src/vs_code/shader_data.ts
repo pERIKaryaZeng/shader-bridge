@@ -151,7 +151,19 @@ export const checkingRegex = new RegExp(
 export interface DefinedConfigurableSettings {[key: string]: string[][]}
 export interface ConfigurableSettings {[key: string]: (string|number|boolean)[]}
 
+const texture_type = [["texture_2d"], ["texture_cube_map"]];
+const textureWrapList = [["repeat"], ["mirrored_repeat"], ["clamp_to_edge"]];
+const textureFilterList = [["nearest"], ["linear"]];
+
 // 每个key可以有多个不同的parameter输入list
 export const definedConfigurableSettings: DefinedConfigurableSettings = {
-    "resolution": [["number", "number"]],
+    "resolution": [["string", "string"], ["string"]],
+    "texture_type": texture_type,
+    "texture_wrap": textureWrapList,
+    "texture_wrap_s": textureWrapList,
+    "texture_wrap_t": textureWrapList,
+    "texture_wrap_r": textureWrapList,
+    "texture_filter": textureFilterList,
+    "texture_min_filter": textureFilterList,
+    "texture_mag_filter": textureFilterList,
 };

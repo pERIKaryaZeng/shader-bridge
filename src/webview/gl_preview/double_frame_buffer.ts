@@ -1,12 +1,47 @@
 import {IFrameBuffer, FrameBuffer, FrameBufferTextureReference} from './frame_buffer';
+import Expression from '../../vs_code/expression';
 
 export default class DoubleFrameBuffer implements IFrameBuffer{
     private frameBufferA: FrameBuffer;
     private frameBufferB: FrameBuffer;
     private isFlipped: boolean = false;
-    constructor(gl: WebGL2RenderingContext, width: number, height: number, outputNumber: number) {
-        this.frameBufferA = new FrameBuffer(gl, width, height, outputNumber);
-        this.frameBufferB = new FrameBuffer(gl, width, height, outputNumber);
+    constructor(
+        gl: WebGL2RenderingContext,
+        width: Expression,
+        height: Expression,
+        textureWrapS: number,
+        textureWrapT: number,
+        textureWrapR: number,
+        textureMinFilter: number,
+        textureMagFilter: number,
+        outputNumber: number,
+        isCubeMap: boolean = false
+    ) {
+        this.frameBufferA = new FrameBuffer(
+            gl,
+            width,
+            height,
+            textureWrapS,
+            textureWrapT,
+            textureWrapR,
+            textureMinFilter,
+            textureMagFilter,
+            outputNumber,
+            isCubeMap
+        );
+        
+        this.frameBufferB = new FrameBuffer(
+            gl,
+            width,
+            height,
+            textureWrapS,
+            textureWrapT,
+            textureWrapR,
+            textureMinFilter,
+            textureMagFilter,
+            outputNumber,
+            isCubeMap
+        );
     }
 
     private getCurrentFrameBuffer(): FrameBuffer {
@@ -17,6 +52,10 @@ export default class DoubleFrameBuffer implements IFrameBuffer{
         return this.isFlipped ? this.frameBufferA : this.frameBufferB;
     }
 
+    public getTextureType(): number {
+        return this.getCurrentFrameBuffer().getTextureType();
+    }
+    
     public get(): WebGLFramebuffer | null {
         return this.getCurrentFrameBuffer().get();
     }

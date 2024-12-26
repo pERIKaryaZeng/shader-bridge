@@ -66,4 +66,9 @@ export default class Texture implements TextureSource {
         return this.texture;
     }
 
+    public getTextureType(): number {
+        return this.gl.TEXTURE_2D;
+    }
+
+
 }

@@ -31,7 +31,6 @@ export default class RenderPass implements Pass {
         this.frameBuffer = frameBuffer;
         this.renderPassInfo = renderPassInfo;
 
- 
         console.log("RenderPass initialized");
 
         this.vao = gl.createVertexArray();
@@ -89,6 +88,7 @@ export default class RenderPass implements Pass {
         let index = 0;
         this.textureSourceInfos.forEach((textureSourceInfo) => {
             const texture = textureSourceInfo.textureSource.getTexture();
+            const textureType = textureSourceInfo.textureSource.getTextureType();
             const uniformName = textureSourceInfo.uniformName;
 
             let uniformLocation: WebGLUniformLocation | null;
@@ -105,7 +105,7 @@ export default class RenderPass implements Pass {
             }
 
             gl.activeTexture(gl.TEXTURE0 + index);
-            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.bindTexture(textureType, texture);
             gl.uniform1i(uniformLocation, index);
             index++;
         });
@@ -118,12 +118,11 @@ export default class RenderPass implements Pass {
         if (this.frameBuffer) {
             this.frameBuffer.bind();
             size = this.frameBuffer.getSize();
-        }else {
+        } else {
             this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
             size = { width: gl.canvas.width, height: gl.canvas.height };
         }
         
-
         gl.viewport(0, 0, size.width, size.height);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -136,6 +135,7 @@ export default class RenderPass implements Pass {
         gl.uniform4f(this.uniformLocations.iMouse, frameState.mouse.x, frameState.mouse.y, 0.0, 0.0);
 
         this.bindTextureUniforms();
+        
 
         gl.bindVertexArray(this.vao);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
