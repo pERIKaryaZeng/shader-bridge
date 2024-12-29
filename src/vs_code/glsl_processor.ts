@@ -11,18 +11,20 @@ import {
     definedConfigurableSettings,
 } from './shader_data';
 // Need to remove "type": "module" in @shaderfrog/glsl-parser/package.json
-//import { parser, generate, GlslSyntaxError } from '@shaderfrog/glsl-parser';
-import { GlslSyntaxError } from '@shaderfrog/glsl-parser';
+import { parser, generate, GlslSyntaxError } from '@shaderfrog/glsl-parser';
+//import { GlslSyntaxError } from '@shaderfrog/glsl-parser';
 import { visit } from '@shaderfrog/glsl-parser/ast';
 //import { preprocess } from '@shaderfrog/glsl-parser/preprocessor';
 import {
-    preprocessAst,
     preprocessComments,
-    generate,
-    parser,
 } from '@shaderfrog/glsl-parser/preprocessor';
-import { console } from 'inspector';
-
+import { Console } from 'console';
+// import {
+//     preprocessAst,
+//     preprocessComments,
+//     generate,
+//     parser,
+// } from '@shaderfrog/glsl-parser/preprocessor';
 
 const customPreprocessor = {
     include: {
@@ -31,6 +33,334 @@ const customPreprocessor = {
 
 
 };
+
+type MacroMap = Map<string, string | { params: string[]; body: string } | undefined>;
+
+type IfStatementStack = {
+    active: boolean;
+    line: number;
+    type: string;
+}
+
+class GLSLPreprocessor {
+    private macros: MacroMap = new Map();
+
+    /**
+     * 预处理 GLSL 源代码
+     * @param source GLSL 源代码
+     * @returns 预处理后的 GLSL 代码
+     */
+    public preprocess(source: string): string {
+        const lines = source.split("\n");
+        const output: string[] = [];
+        const stack: IfStatementStack[] = []; // 条件编译栈
+        let includeBlock = true; // 当前行是否包含在编译中
+        let lineNumber = 1;
+        let lastLineNumber = -1;
+        let tempLine = "";
+
+        const addLine = (line: string) => {
+            if (lineNumber != lastLineNumber + 1) {
+                output.push(`#line ${lineNumber}`);
+            }
+            output.push(line);
+            lastLineNumber = lineNumber;
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+            lineNumber = i + 1;
+            let line = lines[i];
+            const lineTrimStart = line.trimStart();
+
+            // 匹配预处理指令
+            if (tempLine != "" || lineTrimStart.startsWith("#")) {
+                const lineTrimEnd = line.trimEnd();
+                if (lineTrimEnd.endsWith("\\")) {
+                    tempLine += lineTrimEnd.slice(0, -1);
+                    continue;
+                } else {
+                    line = tempLine + line;
+                    tempLine = "";
+                }
+
+
+                const tokens = lineTrimStart.split(/\s+/);
+                const directive = tokens[0];
+                const args = tokens.slice(1).join(" ");
+
+                switch (directive) {
+                    case "#define":
+                        if (includeBlock){
+                            this.handleDefine(args, lineNumber);
+                            addLine(line);
+                        }
+                        break;
+                    case "#undef":
+                        if (includeBlock){
+                            this.handleUndef(args);
+                            addLine(line);
+                        }
+                        break;
+                    case "#if":
+                        includeBlock = this.handleIf(args, stack, lineNumber);
+                        break;
+                    case "#ifdef":
+                        includeBlock = this.handleIfdef(args, stack, lineNumber);
+                        break;
+                    case "#ifndef":
+                        includeBlock = this.handleIfndef(args, stack, lineNumber);
+                        break;
+                    case "#else":
+                        includeBlock = this.handleElse(stack, lineNumber);
+                        break;
+                    case "#elif":
+                        includeBlock = this.handleElif(args, stack, lineNumber);
+                        break;
+                    case "#endif":
+                        includeBlock = this.handleEndif(stack, lineNumber);
+                        break;
+                    default:
+                        if (includeBlock) addLine(line);
+                        break;
+                }
+            }else if (includeBlock) {
+                // 非预处理行输出
+                addLine(line);
+            }
+        }
+
+        // 检查未闭合的条件
+        if (stack.length > 0) {
+            const lastStatement = stack.pop();
+            throw new Error(`Error: Unmatched ${lastStatement?.type} at line ${lastStatement?.line}}.`);
+        }
+
+        return output.join("\n");
+    }
+
+    /**
+     * 处理 #define 指令
+     */
+    private handleDefine(args: string, lineNumber: number): void {
+        // if (args.includes("#") || args.includes("##")) {
+        //     throw new Error(`Error: GLSL does not support stringize (#) or token concatenation (##) at line ${lineNumber}.`);
+        // }
+    
+        const validateMacroName = (name: string): void => {
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+                throw new Error(`Error: Invalid macro name "${name}" at line ${lineNumber}.`);
+            }
+    
+            // 检查是否是 GLSL 的保留关键字或内建宏
+            const reservedKeywords = new Set([
+                "attribute", "const", "uniform", "varying", "break", "continue", "do", "for", "while",
+                "if", "else", "in", "out", "inout", "float", "int", "void", "bool", "true", "false",
+                "discard", "return", "mat2", "mat3", "mat4", "vec2", "vec3", "vec4", "ivec2", "ivec3",
+                "ivec4", "bvec2", "bvec3", "bvec4", "sampler2D", "samplerCube", "struct",
+                "__LINE__", "__FILE__", "__VERSION__", "__GLSL_ES__"
+            ]);
+    
+            if (reservedKeywords.has(name)) {
+                throw new Error(`Error: Macro name "${name}" is a reserved keyword at line ${lineNumber}.`);
+            }
+        };
+    
+        const match = args.match(/^(\w+)\(([^)]*)\)\s+(.+)$/);
+        if (match) {
+            const [, key, params, body] = match;
+            validateMacroName(key); // 检查宏名称是否合法
+            const paramList = params.split(",").map(p => p.trim());
+            paramList.forEach(validateMacroName); // 检查参数名称是否合法
+            this.macros.set(key, { params: paramList, body: this.replaceMacros(body, paramList)});
+        } else {
+            const [key, ...valueParts] = args.split(/\s+/);
+            validateMacroName(key); // 检查宏名称是否合法
+            const value = valueParts.join(" ") || "1";
+            this.macros.set(key, this.replaceMacros(value));// 默认值为 "1"
+        }
+    }
+
+    /**
+     * 处理 #undef 指令
+     */
+    private handleUndef(args: string): void {
+        if (args in this.macros) {
+            this.macros.delete(args);
+        }
+    }
+
+    /**
+     * 处理 #if 指令
+     */
+    private handleIf(args: string, stack: IfStatementStack[], lineNumber: number): boolean {
+        const newCondition = this.evaluateExpression(args, lineNumber);
+        stack.push({active: newCondition, line: lineNumber, type: "#if"});
+        return newCondition;
+    }
+
+    /**
+     * 处理 #ifdef 指令
+     */
+    private handleIfdef(args: string, stack: IfStatementStack[], lineNumber: number): boolean {
+        const newCondition = args in this.macros;
+        stack.push({active: newCondition, line: lineNumber, type: "#ifdef"});
+        return newCondition;
+    }
+
+    /**
+     * 处理 #ifndef 指令
+     */
+    private handleIfndef(args: string, stack: IfStatementStack[], lineNumber: number): boolean {
+        const newCondition = !(args in this.macros);
+        stack.push({active: newCondition, line: lineNumber, type: "#ifndef"});
+        return newCondition;
+    }
+
+    /**
+     * 处理 #else 指令
+     */
+    private handleElse(stack: IfStatementStack[], lineNumber: number): boolean {
+        const lastCondition = stack.pop();
+        const newCondition = !(lastCondition?.active) && stack.every(Boolean);
+        stack.push({active: newCondition, line: lineNumber, type: "#else"});
+        return newCondition;
+    }
+
+    /**
+     * 处理 #elif 指令
+     */
+    private handleElif(args: string, stack: IfStatementStack[], lineNumber: number): boolean {
+        if (stack.length === 0) {
+            throw new Error(`Error: #endif at line ${lineNumber} without matching #if, #ifdef, or #ifndef.`);
+        }
+        
+        const lastCondition = stack.pop();
+        const newCondition = !(lastCondition?.active) && this.evaluateExpression(args, lineNumber) && stack.every(Boolean);
+        stack.push({active: newCondition, line: lineNumber, type: "#elif"});
+        return newCondition;
+    }
+
+    /**
+     * 处理 #endif 指令
+     */
+    private handleEndif(stack: IfStatementStack[], lineNumber: number): boolean {
+        if (stack.length === 0) {
+            throw new Error(`Error: Unexpected #endif at line ${lineNumber} without matching #if, #ifdef, or #ifndef.`);
+        }
+        stack.pop();
+        return stack.every(block => block.active);
+    }
+
+
+
+
+
+    private replaceMacros(input: string, expects: string[] = []): string {
+
+        const parseNestedParams = (params: string): string[] => {
+            const result: string[] = [];
+            let buffer = '';
+            let depth = 0;
+        
+            for (let i = 0; i < params.length; i++) {
+                const char = params[i];
+        
+                if (char === ',' && depth === 0) {
+                    result.push(buffer.trim());
+                    buffer = '';
+                } else {
+                    if (char === '(') depth++;
+                    else if (char === ')') depth--;
+        
+                    buffer += char;
+                }
+            }
+        
+            if (buffer.trim()) {
+                result.push(buffer.trim());
+            }
+        
+            return result;
+        }
+
+        const replaceFunctions = (input: string):string => {
+            const functionRegex = /(?<![a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/;
+        
+            while (true) {
+                const match = input.match(functionRegex);
+                if (!match) break;
+        
+                const macroName = match[1];
+                if (expects.includes(macroName)) {
+                    continue;
+                }
+                const startIdx = input.indexOf(match[0]);
+                const paramsEndIdx = input.indexOf(')', startIdx);
+                if (paramsEndIdx === -1) throw new Error('Unmatched parentheses');
+        
+                const params = input.slice(startIdx + macroName.length + 1, paramsEndIdx);
+        
+                const macroValue = this.macros.get(macroName);
+                if (macroValue && typeof macroValue === "object" && macroValue.params && macroValue.body) {
+            
+                    const paramList = parseNestedParams(params);
+                    if (macroValue.params.length !== paramList.length) {
+                        throw new Error(`Macro ${macroName} expects ${macroValue.params.length} arguments, but got ${paramList.length}`);
+                    }
+            
+                    let replacedBody = macroValue.body;
+                    macroValue.params.forEach((param: string, idx: number) => {
+                        const paramRegex = new RegExp(`(?<![a-zA-Z0-9_])${param}(?![a-zA-Z0-9_])`, 'g');
+                        replacedBody = replacedBody.replace(paramRegex, paramList[idx]);
+                    });
+            
+                    input = input.slice(0, startIdx) + replacedBody + input.slice(paramsEndIdx + 1);
+                }
+            }
+        
+            return input;
+        }
+
+        const replaceString = (input: string):string => {
+            const regex = /(?<![a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])/g;
+    
+            // 替换逻辑
+            return input.replace(regex, (match, macroName): string => {
+                if (expects.includes(macroName)) {
+                    return match;
+                }
+                const macroValue = this.macros.get(macroName);
+                if (macroValue && typeof macroValue === "string") {
+                    // 如果是简单宏，直接替换
+                    return macroValue;
+                }
+                return match; // 如果不是宏，则保留原内容
+            });
+        }
+
+        return replaceFunctions(replaceString(input));
+    }
+    
+    /**
+     * 解析和评估表达式
+     */
+    private evaluateExpression(expr: string, lineNumber: number): boolean {
+        const expandedExpr = this.replaceMacros(expr); // 展开表达式中的所有宏
+        console.log(`Expanded expression: ${expandedExpr}`);
+    
+        // 检查是否包含浮点数（GLSL #if 仅支持整数表达式）
+        // if (/[.]/.test(expandedExpr)) {
+        //     throw new Error(`Error: Float values are not allowed in #if expressions at line ${lineNumber}.`);
+        // }
+    
+        try {
+            return !!eval(expandedExpr); // 使用 eval 计算结果
+        } catch {
+            throw new Error(`Error: Invalid expression "${expandedExpr}" in #if at line ${lineNumber}.`);
+        }
+    }
+}
+
 
 export class GLSLProcessor {
     private filePath: string;
@@ -46,7 +376,6 @@ export class GLSLProcessor {
     private addLineMappingComments(commentsRemovedSrc: string): string {
         // 将代码分割为行
         const lines = commentsRemovedSrc.split("\n");
-
 
         const processedLines:string[] = [];
 
@@ -91,12 +420,57 @@ export class GLSLProcessor {
         }
     }
 
+    public extractNested(input: string): { type: string; content: any[]; remaining: string } {
+        let depth = 0;
+        let currentContent: any[] = [];
+        let stack: any[] = [];
+        let i = 0;
+    
+        for (; i < input.length; i++) {
+            const char = input[i];
+            if (char === "(") {
+                depth++;
+                const newNode = { type: "parenthesis", content: [] };
+                currentContent.push(newNode);
+                stack.push(currentContent);
+                currentContent = newNode.content;
+            } else if (char === ")") {
+                depth--;
+                if (depth < 0) {
+                    throw new Error("Mismatched parentheses");
+                }
+                currentContent = stack.pop();
+            } else {
+                // Merge adjacent characters into strings instead of splitting into individual characters
+                if (depth > 0) {
+                    if (typeof currentContent[currentContent.length - 1] === "string") {
+                        currentContent[currentContent.length - 1] += char;
+                    } else {
+                        currentContent.push(char);
+                    }
+                } else {
+                    // Handle root-level characters outside parentheses
+                    if (typeof currentContent[currentContent.length - 1] === "string") {
+                        currentContent[currentContent.length - 1] += char;
+                    } else {
+                        currentContent.push(char);
+                    }
+                }
+            }
+        }
+    
+        if (depth !== 0) {
+            throw new Error("Mismatched parentheses");
+        }
+    
+        return { type: "root", content: currentContent, remaining: input.slice(i) };
+    }
+    
+    
+
     public processLineMappings(astObj: any): void {
         this.visitAst(astObj, (astObj) => {
             if ("text" in astObj) {
-                console.log("find text: "); // 打印 text 的值
-                console.log(astObj.text); // 打印 text 的值
-
                 const lines = astObj.text.split("\n"); // 按行分割字符串
                 const textLines: {text: string, lineMapping: {fileIndex: number, lineIndex: number}}[] = [];
             
@@ -119,53 +493,96 @@ export class GLSLProcessor {
         });
     }
     
-    public generateFileAndMapping(astObj: any): {file: string, lineMappings: {fileIndex: number, lineIndex: number}[]} {
+    public generateFileWithMapping(astObj: any): string {
         let file = "";
-        const lineMappings: {fileIndex: number, lineIndex: number}[] = [];
+        let lastLineIndex = -1;
         this.visitAst(astObj, (astObj) => {
             if ("textLines" in astObj) {
                 for (const textLine of astObj.textLines) {
+                    if (lastLineIndex + 1 != textLine.lineMapping.lineIndex){
+                        file += `#line ${textLine.lineMapping.lineIndex}\n`;
+                    }
                     file += textLine.text + "\n";
-                    lineMappings.push(textLine.lineMapping);
+                    lastLineIndex = textLine.lineMapping.lineIndex;
                 }
             }
         });
-        return {
-            file: file,
-            lineMappings: lineMappings
-        };
+        return file;
     }
-    
+
+    public parserPreprocess(source: string): {lineNumber: number, type: string, text: string}[] {
+        const lines = source.split("\n");
+        const codeBlock: {lineNumber: number, type: string, text: string}[] = [];
+
+        let textLineNumber = 1;
+        let text = "";
+        for (let i = 0; i < lines.length; i++) {
+            const lineNumber = i + 1;
+            const line = lines[i].trim();
+
+            // 匹配预处理指令
+            if (line.startsWith("#")) {
+                if (text != ""){
+                    codeBlock.push({lineNumber: textLineNumber, type: "text", text: text});
+                    text = "";
+                }
+                const tokens = line.split(/\s+/);
+                const directive = tokens[0];
+                const args = tokens.slice(1).join(" ");
+                codeBlock.push({lineNumber: lineNumber, type: directive, text: args});
+                textLineNumber = lineNumber + 1;
+                
+            } else {
+                text += line + "\n";
+            }
+        }
+        if (text != ""){
+            // text.slice(0, -1)去末尾最后一个\n
+            codeBlock.push({lineNumber: textLineNumber, type: "text", text: text.slice(0, -1)});
+        }
+        return codeBlock;
+    }
 
     public process(): void {
-        // const options = {
-        //     // Don't strip comments before preprocessing
-        //     preserveComments: false,
-        //     // Macro definitions to use when preprocessing
-        //     defines: {},
-        //     // A list of callbacks evaluated for each node type, and returns whether or not
-        //     // this AST node is subject to preprocessing
-        //     preserve: {}
-        // };
 
         let error: GlslSyntaxError | undefined;
         try {
+            const src = this.readGLSLFile(this.filePath);
+            const commentsRemovedSrc = preprocessComments(src);
+            const preprocessor = new GLSLPreprocessor();
+            const processedCode = preprocessor.preprocess(commentsRemovedSrc);
+            console.log(processedCode);
 
-            // console.log(
-            //     preprocess(`
-            //     //#ddd
-            //     float a = 1111111;
-            //     #ifdef LIGHTS_ENABLED
 
-            //         #define a 1
-            //         float b = a;
-            //     #else
-            //         float c = sa;
-            //     #endif
-            //   `,
-            //   options)
-            // );
-    
+            // const src = this.readGLSLFile(this.filePath);
+            // const commentsRemovedSrc = preprocessComments(src);
+            // const preprocessedResult = this.parserPreprocess(commentsRemovedSrc);
+            // console.log(preprocessedResult);
+
+            // for (const codeBlock of preprocessedResult) {
+            //     if (codeBlock.type == "text") {
+            //         console.log("----------------------------------------------------");
+            //         console.log(this.extractNested(codeBlock.text));
+            //     }
+                
+            // }
+
+
+
+
+
+
+            // console.log(commentsRemovedSrc);
+            // const commentedSrc = this.addLineMappingComments(commentsRemovedSrc);
+            // console.log(commentedSrc);
+            // const ast = parser.parse(commentedSrc);
+
+
+
+/*
+
+
+
             const src = this.readGLSLFile(this.filePath);
             const commentsRemovedSrc = preprocessComments(src);
             console.log(commentsRemovedSrc);
@@ -175,9 +592,16 @@ export class GLSLProcessor {
             this.processLineMappings(ast);
             preprocessAst(ast);
             console.log(ast);
-            const {file: preprocessSrc, lineMappings: lineMappings} = this.generateFileAndMapping(ast);
-            console.log(preprocessSrc);
-            console.log(lineMappings);
+            const file = this.generateFileWithMapping(ast);
+            console.log(file);
+
+
+
+*/
+
+
+
+
 
             // const src = this.readGLSLFile(this.filePath);
             // const commentsRemovedSrc = preprocessComments(src);
@@ -196,82 +620,88 @@ export class GLSLProcessor {
 
             //console.log(generate(ast));
 
-            //const ast = parser.parse(src);
+
+
+            
+            // const src = this.readGLSLFile(this.filePath);
 
 
 
+
+            const ast = parser.parse(processedCode);
     
-            // visit(ast, {
-            //     preprocessor: {
-            //         enter: (astPath: any) => {
-            //             console.log("Entering astPath: ", astPath);
+            visit(ast, {
+                preprocessor: {
+                    enter: (astPath: any) => {
+                        console.log("Entering astPath: ", astPath);
                         
-            //             const line = astPath.node.line;
+                        const line = astPath.node.line;
 
 
-            //             // 优先匹配 #include 指令
-            //             const includeMatch = line.match(/^#include\s+["'](.+?)["']/);
-            //             if (includeMatch) {
-            //                 let includeFilePath = includeMatch[1];
-            //                 console.log('Preprocessing include: ', includeFilePath);
+                        // 优先匹配 #include 指令
+                        const includeMatch = line.match(/^#include\s+["'](.+?)["']/);
+                        if (includeMatch) {
+                            let includeFilePath = includeMatch[1];
+                            console.log('Preprocessing include: ', includeFilePath);
 
-            //                 const isLocalPath = !/^https?:\/\/\S+/.test(includeFilePath);
-            //                 if (isLocalPath){
-            //                     // 使用 replace 方法替换"file://"
-            //                     includeFilePath = includeFilePath.replace( /^\s*file\s*:\s*\/\s*\//i, '');
-            //                     if (includeFilePath.trim() === "self"){
-            //                         includeFilePath = this.filePath;
-            //                     }else{
-            //                         includeFilePath = path.resolve(path.dirname(this.filePath), includeFilePath);
-            //                     }
-            //                 }
+                            const isLocalPath = !/^https?:\/\/\S+/.test(includeFilePath);
+                            if (isLocalPath){
+                                // 使用 replace 方法替换"file://"
+                                includeFilePath = includeFilePath.replace( /^\s*file\s*:\s*\/\s*\//i, '');
+                                if (includeFilePath.trim() === "self"){
+                                    includeFilePath = this.filePath;
+                                }else{
+                                    includeFilePath = path.resolve(path.dirname(this.filePath), includeFilePath);
+                                }
+                            }
                             
-            //                 const includeSrc = this.readGLSLFile(includeFilePath);
-            //                 const includeAst = parser.parse(includeSrc);
-            //                 console.log('includeAst: ', includeAst);
+                            const includeSrc = this.readGLSLFile(includeFilePath);
+                            const includeAst = parser.parse(includeSrc);
+                            console.log('includeAst: ', includeAst);
 
-            //                 // let includeNodes: any;
-            //                 // visit(includeAst, {
-            //                 //     program: {
-            //                 //         enter: (astPath: any) => {
-            //                 //             includeNodes = astPath.node;
-            //                 //         },
-            //                 //         exit: (astPath: any) => {},
-            //                 //     }
-            //                 // });
+                            // let includeNodes: any;
+                            // visit(includeAst, {
+                            //     program: {
+                            //         enter: (astPath: any) => {
+                            //             includeNodes = astPath.node;
+                            //         },
+                            //         exit: (astPath: any) => {},
+                            //     }
+                            // });
 
-            //                 astPath.replaceWith(includeAst);
+                            astPath.replaceWith(includeAst);
 
-            //                 return;
-            //             }
+                            return;
+                        }
                        
-            //             // 匹配 #iChannel:uniformName "文件地址" 或 #iChannel{数字} "文件地址" (兼容shader toy)
-            //             const iChannelMatch = line.match(/^#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
-            //             if (iChannelMatch){
-            //                 const channelNumber = iChannelMatch[1];
-            //                 const customName = iChannelMatch[2];
-            //                 const uniformName = customName || `iChannel${channelNumber}`;
-            //                 console.log('Preprocessing iChannel with uniformName: ', uniformName);
-            //                 return;
-            //             }
+                        // 匹配 #iChannel:uniformName "文件地址" 或 #iChannel{数字} "文件地址" (兼容shader toy)
+                        const iChannelMatch = line.match(/^#iChannel(?:(\d+)|:(\w+))\s+["'](.+?)["']/);
+                        if (iChannelMatch){
+                            const channelNumber = iChannelMatch[1];
+                            const customName = iChannelMatch[2];
+                            const uniformName = customName || `iChannel${channelNumber}`;
+                            console.log('Preprocessing iChannel with uniformName: ', uniformName);
+                            return;
+                        }
                         
-            //             console.log('Unknown preprocessor: ', line);
+                        console.log('Unknown preprocessor: ', line);
                         
 
-            //         },
-            //         exit: (astPath: any) => {
-            //             console.log("Exiting astPath: ", astPath);
-            //         },
-            //     }
-            // });
+                    },
+                    exit: (astPath: any) => {
+                        console.log("Exiting astPath: ", astPath);
+                    },
+                }
+            });
 
             
 
-            //console.log(ast);
-            //preprocessAst(ast);
+            console.log(ast);
 
-            //console.log(generate(ast));
+            console.log(generate(ast));
+
         } catch (e) {
+            console.log(e);
             error = e as GlslSyntaxError;
             console.log(error.name, ": ", error.message);
             console.log("At: ", error.location)
