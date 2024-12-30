@@ -42,21 +42,31 @@ type IfStatementStack = {
     type: string;
 }
 
+type IChannelInfos = Map<string, {path: string, type: string, textureSettings: object}>;
+
 class GLSLPreprocessor {
     private macros: MacroMap = new Map();
+    private version: string = "";
+    private precision: string = "";
+    private iChannelInfos: IChannelInfos = new Map();
+
+    private readGLSLFile(filePath: string): string {
+        return fs.readFileSync(filePath, 'utf8');
+    }
 
     /**
      * 预处理 GLSL 源代码
      * @param source GLSL 源代码
      * @returns 预处理后的 GLSL 代码
      */
-    public preprocess(source: string): string {
-        const lines = source.split("\n");
+    public preprocess(filePath: string, lastLineNumber: number = 0): {outputSrc: string, lastLineNumber: number} {
+        const src = removeComments(this.readGLSLFile(filePath));
+        const lines = src.split("\n");
         const output: string[] = [];
         const stack: IfStatementStack[] = []; // 条件编译栈
         let includeBlock = true; // 当前行是否包含在编译中
         let lineNumber = 1;
-        let lastLineNumber = -1;
+        let includeLineNumber = 0;
         let tempLine = "";
 
         const addLine = (line: string) => {
@@ -64,7 +74,64 @@ class GLSLPreprocessor {
                 output.push(`#line ${lineNumber}`);
             }
             output.push(line);
-            lastLineNumber = lineNumber;
+            if (includeLineNumber > 0){
+                lastLineNumber = includeLineNumber;
+                includeLineNumber = 0;
+            }else{
+                lastLineNumber = lineNumber;
+            }
+        }
+
+        const handleBlockPreprocessors = (args: string, tokens: string[], line: string): string => {
+            const directive = tokens[0];
+            switch (directive) {
+                case "#define":
+                    this.handleDefine(args, lineNumber);
+                    return line;
+                case "#undef":
+                    this.handleUndef(args);
+                    return line;
+                case "#version":
+                    this.version = args;
+                    return line;
+                case "#set":
+                    
+    
+    
+    
+                    return "";
+                case "#include":
+                    const includeMatch = args.match(/^\s*["'](.+?)["']/);
+                    if (includeMatch) {
+                        const includePath = path.resolve(path.dirname(filePath), includeMatch[1]);
+                        const {
+                            outputSrc: includeFileSrc,
+                            lastLineNumber: newLastLineNumber
+                        } = this.preprocess(includePath, lastLineNumber);
+                        includeLineNumber = newLastLineNumber;
+                        return includeFileSrc;
+                    }
+                    return line;
+                default:
+                    const ichannelMatch = directive.match(/#iChannel(?:(\d+)|:(\w+))/);
+                    if (ichannelMatch) {
+                        const channelNumber = ichannelMatch[1];
+                        const customName = ichannelMatch[2];
+                        const uniformName = customName || `iChannel${channelNumber}`;
+                        const ichannelPath = args; // 获取文件路径
+                        this.iChannelInfos.set(
+                            uniformName, 
+                            {
+                                path: ichannelPath,
+                                type: "",
+                                textureSettings: {}
+                            }
+                        ); // 添加到 iChannelFiles Map
+                        return "";
+                    }
+    
+                    return line;
+            }
         }
 
         for (let i = 0; i < lines.length; i++) {
@@ -89,18 +156,6 @@ class GLSLPreprocessor {
                 const args = tokens.slice(1).join(" ");
 
                 switch (directive) {
-                    case "#define":
-                        if (includeBlock){
-                            this.handleDefine(args, lineNumber);
-                            addLine(line);
-                        }
-                        break;
-                    case "#undef":
-                        if (includeBlock){
-                            this.handleUndef(args);
-                            addLine(line);
-                        }
-                        break;
                     case "#if":
                         includeBlock = this.handleIf(args, stack, lineNumber);
                         break;
@@ -120,7 +175,12 @@ class GLSLPreprocessor {
                         includeBlock = this.handleEndif(stack, lineNumber);
                         break;
                     default:
-                        if (includeBlock) addLine(line);
+                        if (includeBlock) {
+                            const fileStr = handleBlockPreprocessors(args, tokens, line);
+                            if (fileStr) {
+                                addLine(fileStr);
+                            }
+                        }
                         break;
                 }
             }else if (includeBlock) {
@@ -135,7 +195,10 @@ class GLSLPreprocessor {
             throw new Error(`Error: Unmatched ${lastStatement?.type} at line ${lastStatement?.line}}.`);
         }
 
-        return output.join("\n");
+        return {
+            outputSrc: output.join("\n"),
+            lastLineNumber: lastLineNumber
+        }
     }
 
     /**
@@ -250,10 +313,6 @@ class GLSLPreprocessor {
         stack.pop();
         return stack.every(block => block.active);
     }
-
-
-
-
 
     private replaceMacros(input: string, expects: string[] = []): string {
 
@@ -547,10 +606,10 @@ export class GLSLProcessor {
 
         let error: GlslSyntaxError | undefined;
         try {
-            const src = this.readGLSLFile(this.filePath);
-            const commentsRemovedSrc = preprocessComments(src);
+            //const src = this.readGLSLFile(this.filePath);
+            //const commentsRemovedSrc = preprocessComments(src);
             const preprocessor = new GLSLPreprocessor();
-            const processedCode = preprocessor.preprocess(commentsRemovedSrc);
+            const processedCode = preprocessor.preprocess(this.filePath).outputSrc;
             console.log(processedCode);
 
 
