@@ -6,34 +6,96 @@ import Viewer from './viewer';
 declare function acquireVsCodeApi(): any;
 
 export default class WebGLContext {
-    private gl!: WebGL2RenderingContext; // 使用 WebGL2RenderingContext
-    public shaderData!: ShaderData;
-    public fragmentShaderSource!: string; // 生成的片段着色器源码
-    private canvas!: HTMLCanvasElement; // 保存 Canvas 引用
-    private viewer!: Viewer;
+    public static canvasId = 'glCanvas';
+    public static gl: WebGL2RenderingContext; // 使用 WebGL2RenderingContext
+    public static canvas: HTMLCanvasElement; // 保存 Canvas 引用
+    public static viewer: Viewer;
+    public static vscode: any;
     private constructor() {}
 
-    // 静态工厂方法
-    public static async create(canvasId: string, viewer: Viewer): Promise<WebGLContext> {
-        const instance = new WebGLContext();
-        await instance.initialize(canvasId, viewer); // 调用异步初始化逻辑
-        return instance;
+    private static async initVSCodeListener(): Promise<void> {
+        WebGLContext.vscode = acquireVsCodeApi();
+        
+        const chunks: string[] = [];
+        let totalChunks = 0;
+        window.addEventListener('message', async (event) => {
+
+            
+            const message = event.data;
+
+            if (message.type === 'chunk') {
+                // 收集分块数据
+                chunks[message.index] = message.data;
+                totalChunks = message.totalChunks;
+                //document.getElementById('status').textContent = `Received chunk ${message.index + 1} ${totalChunks}`;
+            } else if (message.type === 'transferComplete') {
+                // 重组数据
+                const fullData = chunks.join('');
+                const parsedData = JSON.parse(fullData);
+                console.log('Received Data:', parsedData);
+                //document.getElementById('status').textContent = 'Transfer Complete!';
+
+                try {
+                    WebGLContext.viewer = await Viewer.create(WebGLContext.gl, parsedData);
+                } catch (error) {
+                    console.log("errorOutput----------------------------------------------------------")
+                    const errorOutput = document.getElementById('errorOutput') as HTMLElement;
+            
+                    if (errorOutput) {
+                        errorOutput.style.display = 'block';
+                        errorOutput.textContent = (error as Error).message || 'Unknown error occurred';
+            
+                        // 使用 HTML 渲染错误日志
+                        errorOutput.innerHTML = `${errorOutput.textContent}`;
+                    }
+            
+                    console.error(error);
+                }
+            }
+        });
+
+        
+
+        WebGLContext.vscode.postMessage({ command: 'startTransfer' });
+        console.log('Sent startTransfer command to VS Code');
     }
 
-    private async initialize(canvasId: string, viewer: Viewer): Promise<void> {
-        this.viewer = viewer;
-
+    public static async init(): Promise<void> {
         // 初始化 Canvas 和 WebGL2 上下文
-        this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-        if (!this.canvas) {
-            throw new Error(`Canvas with ID "${canvasId}" not found`);
+        WebGLContext.canvas = document.getElementById(WebGLContext.canvasId) as HTMLCanvasElement;
+        if (!WebGLContext.canvas) {
+            throw new Error(`Canvas with ID "${WebGLContext.canvasId}" not found`);
         }
 
-        this.gl = this.canvas.getContext('webgl2') as WebGL2RenderingContext; // 确保使用 WebGL2
-        if (!this.gl) {
+        WebGLContext.gl = WebGLContext.canvas.getContext('webgl2') as WebGL2RenderingContext; // 确保使用 WebGL2
+        if (!WebGLContext.gl) {
             throw new Error('WebGL 2.0 is not supported');
         }
 
+        //         // 添加点击事件监听器
+//         document.addEventListener('click', (event: MouseEvent) => {
+//             const target = (event.target as HTMLElement)?.closest('.file-link') as HTMLElement | null;
+//             if (target) {
+//                 event.preventDefault();
+                
+//                 const filePath = target.getAttribute('data-file-path');
+//                 const lineNumber = parseInt(target.getAttribute('data-line-number') || '', 10);
+
+//                 if (filePath) {
+//                     console.log(filePath, lineNumber);
+
+//                     vscode.postMessage({
+//                         command: 'openFile',
+//                         filePath,
+//                         lineNumber
+//                     });
+//                 }
+//             }
+//         });
+
+        await WebGLContext.initVSCodeListener();
+        
+/*
         // 启用y轴翻转
         this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, true);
 
@@ -62,9 +124,12 @@ export default class WebGLContext {
             console.error("Error loading files:", error);
             return; // 终止后续逻辑
         }
+
+
+        */
     }
 
-    
+    /*
     private initButtons(): void {
         const playButton = document.getElementById('playButton');
         if(playButton){
@@ -177,4 +242,6 @@ export default class WebGLContext {
     public get(): WebGL2RenderingContext {
         return this.gl;
     }
+
+    */
 }

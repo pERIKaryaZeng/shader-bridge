@@ -4,7 +4,9 @@ import { showGLSLPreview } from './webview_manager';
 export const registerRunGLSLCommand = (context: vscode.ExtensionContext) => {
     const command = vscode.commands.registerCommand('shader-bridge.runGLSL', (uri: vscode.Uri) => {
         if (uri) {
-            showGLSLPreview(context, uri);
+            (async () => {
+                await showGLSLPreview(context, uri);
+            })();
         } else {
             vscode.window.showErrorMessage('No GLSL file selected!');
         }
@@ -28,7 +30,9 @@ export const registerSaveAndRunGLSLCommand = (context: vscode.ExtensionContext) 
             }
         }
 
-        showGLSLPreview(context, uri);
+        (async () => {
+            await showGLSLPreview(context, uri);
+        })();
     });
 
     context.subscriptions.push(command);
