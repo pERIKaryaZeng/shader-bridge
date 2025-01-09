@@ -2,11 +2,13 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { encodeBase64 } from './string_tools';
-import { PipelinePreprocessor } from './glsl_processor';
+import { PipelinePreprocessor, PipelineData } from './pipeline_preprocessor';
 import { ShaderData } from './shader_data';
 
 // 用于存储 WebviewPanel 的全局变量
 let panel: vscode.WebviewPanel | undefined;
+
+
 
 function sendChunkedData(panel: vscode.WebviewPanel, data: any, chunkSize: number) {
     const jsonData = JSON.stringify(data); // 将数据序列化为 JSON
@@ -33,7 +35,28 @@ function sendChunkedData(panel: vscode.WebviewPanel, data: any, chunkSize: numbe
 export const showGLSLPreview = async(context: vscode.ExtensionContext, uri: vscode.Uri) => {
     const mainfilePath = uri.fsPath;
     
-    const pipelinePreprocessor = await PipelinePreprocessor.create(mainfilePath);
+    let pipelineData: PipelineData;
+    try{
+        const pipelinePreprocessor = await PipelinePreprocessor.create(mainfilePath);
+        pipelineData = pipelinePreprocessor.getOutput();
+    }catch (error) {
+        if (error instanceof Error) {
+            pipelineData = {
+                state: "failure",
+                error: error.message,
+            };
+        } else {
+            // 处理非标准错误对象
+            pipelineData = {
+                state: "failure",
+                error: String(error), // 将非 Error 类型转换为字符串
+            };
+        }
+    }
+
+
+
+    
 
     // 动态维护允许的资源路径列表
     const dynamicRoots = new Set<string>();
@@ -74,15 +97,9 @@ export const showGLSLPreview = async(context: vscode.ExtensionContext, uri: vsco
     panel.webview.onDidReceiveMessage((message) => {
 
         if (message.command === 'startTransfer') {
-            const data = {
-                preprocessorOutputs: pipelinePreprocessor.preprocessorOutputs,
-                renderPassList: pipelinePreprocessor.renderPassList,
-                renderOrder: pipelinePreprocessor.renderOrder,
-                fileList: Array.from(pipelinePreprocessor.fileMap.keys())
-            }
 
             if (panel) {
-                sendChunkedData(panel, data, 1024 * 8); // 每块大小为 8KB
+                sendChunkedData(panel, pipelineData, 1024 * 8); // 每块大小为 8KB
             }
         } else if (message.command === 'openFile') {
             const fileUri = vscode.Uri.file(message.filePath);
@@ -98,14 +115,14 @@ export const showGLSLPreview = async(context: vscode.ExtensionContext, uri: vsco
     });
 
     // 更新 Webview 内容
-    updateWebviewContent(panel, context, pipelinePreprocessor);
+    updateWebviewContent(panel, context, pipelineData);
 
 
 
 }
 
 
-function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, pipelinePreprocessor: PipelinePreprocessor) {
+function updateWebviewContent(panel: vscode.WebviewPanel, context: vscode.ExtensionContext, pipelineData: PipelineData) {
 
     const baseUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "dist", " ")));
 

@@ -5,6 +5,7 @@ import RenderPass from './render_pass';
 import Pipeline from './pipeline';
 import { FrameBuffer, IFrameBuffer } from './frame_buffer';
 import DoubleFrameBuffer from './double_frame_buffer';
+import { PipelineData } from '../../vs_code/pipeline_preprocessor';
 // import { TextureSourceInfo } from './texture_source';
 // import Texture from './texture';
 // import { getDefaultRenderPassInfo } from '../../vs_code/shader_data';
@@ -34,16 +35,16 @@ export default class Viewer {
         this.gl = gl;
     }
 
-    public static async create(gl: WebGL2RenderingContext, preprocessedData: any): Promise<Viewer> {
+    public static async create(gl: WebGL2RenderingContext, pipelineData: PipelineData): Promise<Viewer> {
         const instance = new Viewer(gl);
-        await instance.init(preprocessedData);
+        await instance.init(pipelineData);
         instance.reset();
         return instance;
     }
 
-    private async init(preprocessedData: any): Promise<void> {
+    private async init(pipelineData: PipelineData): Promise<void> {
 
-        this.initContent(preprocessedData);
+        this.initContent(pipelineData);
         // 初始化 WebGL 上下文
         // try {
         //     this.webglContext = await WebGLContext.create(canvasId, this);
@@ -67,7 +68,11 @@ export default class Viewer {
         document.body.appendChild(this.stats.dom);
     }
 
-    private initContent(preprocessedData: any): void {
+    private initContent(pipelineData: PipelineData): void {
+        if (pipelineData.state === 'failure') {
+            throw new Error(pipelineData.error);
+        }
+
         this.frameBuffers = [];
         // 初始化着色器
         const vertexShaderSource = 
@@ -125,8 +130,8 @@ export default class Viewer {
         const vertexShader = new Shader(this.gl, this.gl.VERTEX_SHADER, vertexShaderSource);
 
         const shaderProgramList: ShaderProgram[] = [];
-        for (const preprocessorOutput of preprocessedData.preprocessorOutputs) {
-            const fragmentShader = new Shader(this.gl, this.gl.FRAGMENT_SHADER, preprocessorOutput.src, preprocessedData.fileList);
+        for (const preprocessorOutput of pipelineData.channelOutputs) {
+            const fragmentShader = new Shader(this.gl, this.gl.FRAGMENT_SHADER, preprocessorOutput.src, pipelineData.fileList);
             shaderProgramList.push(new ShaderProgram(this.gl, vertexShader, fragmentShader));
         }
 

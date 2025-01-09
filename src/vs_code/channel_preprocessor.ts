@@ -1,329 +1,47 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { Value, ValueReferenceTable, verifyInputValue } from './value';
+import { preprocessorSetting } from './preprocessor_setting';
 import { removeComments } from './string_tools';
-import {
-    checkingRegex,
-    getDefaultCheckingStrings,
-    RenderPassInfo,
-    ShaderData,
-    LineMapping,
-    getDefaultRenderPassInfo,
-    definedConfigurableSettings,
-} from './shader_data';
 // Need to remove "type": "module" in @shaderfrog/glsl-parser/package.json
-import { parser, generate, GlslSyntaxError } from '@shaderfrog/glsl-parser';
-//import { GlslSyntaxError } from '@shaderfrog/glsl-parser';
-import { visit } from '@shaderfrog/glsl-parser/ast';
-//import { preprocess } from '@shaderfrog/glsl-parser/preprocessor';
-import {
-    preprocessComments,
-} from '@shaderfrog/glsl-parser/preprocessor';
-import { Console } from 'console';
-import { Children } from 'react';
-// import {
-//     preprocessAst,
-//     preprocessComments,
-//     generate,
-//     parser,
-// } from '@shaderfrog/glsl-parser/preprocessor';
+import { parser, GlslSyntaxError } from '@shaderfrog/glsl-parser';
 
-
-type RenderPassInfoNew = {
-    preprocessorIndex: number
-    settings: ChannelSettings;
-    isDoubleBuffer: boolean;
-}
-
-export class PipelinePreprocessor {
-    private mainFilePath: string;
-    private preprocessorIndexMap = new Map<string, number>();
-    public preprocessorOutputs: PreprocessorOutput[] = [];
-    private renderPassIndexMap =  new Map<string, number>();
-    public renderPassList: RenderPassInfoNew[] = [];
-    private branchSet = new Set<number>();
-    public fileMap: Map<string, number> = new Map<string, number>();
-    public renderOrder: number[] = [];
-
-    private constructor(rootPath: string) {
-        this.mainFilePath = rootPath;
-    }
-
-    static async create(mainFilePath: string): Promise<PipelinePreprocessor> {
-        const instance = new PipelinePreprocessor(mainFilePath);
-        await instance.init();
-        return instance;
-    }
-
-    private async init(): Promise<void> {
-        await this.preprocess(this.mainFilePath);
-        console.log("preprocessorOutputs: ", this.preprocessorOutputs);
-        console.log("renderPassList: ", this.renderPassList);
-        console.log("renderOrder: ", this.renderOrder);
-    }
-
-    private async preprocess (
-        filePath: string,
-        channelSettings: ChannelSettings = {
-            MinFilter: 'Linear',
-            MagFilter: 'Linear',
-            WrapMode: 'Repeat'
-        }
-    ): Promise<number> {
-
-
-
-        let preprocessorIndex = this.preprocessorIndexMap.get(filePath);
-        let preprocessorOutput: PreprocessorOutput;
-        let channelInfos: Map<string, ChannelInfo> | undefined;
-        if (preprocessorIndex == undefined) {
-            const preprocessor = await GLSLPreprocessor.create(filePath, this.fileMap);
-            preprocessorOutput = preprocessor.getOutput();
-            channelInfos = preprocessor.getChannelInfos();
-            console.log("preprocessorOutput.src: \n", preprocessorOutput.src);
-            console.log("channelInfos: ", channelInfos);
-            preprocessorIndex = this.preprocessorOutputs.length;
-            this.preprocessorIndexMap.set(filePath, preprocessorIndex);
-            this.preprocessorOutputs.push(preprocessorOutput);
-        } else {
-            preprocessorOutput = this.preprocessorOutputs[preprocessorIndex];
-            channelInfos = undefined;
-        }
-
-        const key = [
-            preprocessorIndex,
-            channelSettings.MinFilter,
-            channelSettings.MagFilter,
-            channelSettings.WrapMode
-        ].join(",");
-
-        let renderPassIndex = this.renderPassIndexMap.get(key);
-        if (renderPassIndex != undefined) {
-            return renderPassIndex;
-        }
-        renderPassIndex = this.renderPassList.length;
-
-        let renderPassInfo = {
-            preprocessorIndex: preprocessorIndex,
-            settings: channelSettings,
-            isDoubleBuffer: false
-        }
-        
-        this.renderPassIndexMap.set(key, renderPassIndex);
-        this.renderPassList.push(renderPassInfo);
-
-
-
-        this.branchSet.add(renderPassIndex);
-
-        if (channelInfos != undefined) {
-            
-            for (const [uniformName, channelInfo] of channelInfos) {
-                console.log(`uniformName: ${uniformName}`);
-
-                const channelPath = channelInfo.filePath;
-
-                // 获取文件的扩展名
-                const fileExtension = path.extname(channelPath).toLowerCase();
-                //console.log(`File extension: ${fileExtension}`);
-
-                const exists = await checkFileExists(channelPath);
-                console.log( "checkFileExists: ", channelPath, ", ", exists);
-
-
-                // 根据文件类型处理
-                switch (fileExtension) {
-                    case '.png':
-                    case '.jpg':
-                    case '.jpeg':
-                        let channelType = 'texture2d';
-                        if (!exists){
-                            if (/\{\}/.test(channelPath)){
-                                channelType = 'cubeMap';
-                                const cubeMapMissingList: string[] = [];
-
-                                const faceNameGroups = [
-                                    ['px', 'nx', 'py', 'ny', 'pz', 'nz'],
-                                    ['e', 'w', 'u', 'd', 'n', 's'], 
-                                    ['east', 'west', 'up', 'down', 'north', 'south'], 
-                                    ['posx', 'negx', 'posy', 'negy', 'posz', 'negz'],
-                                ];
-
-                                const cubeMapPaths = await Promise.all(
-                                    faceNameGroups[0].map(async (_, faceIndex) => {
-                                        // 获取所有命名方式中当前面的命名列表
-                                        const faceStrings = faceNameGroups.map(group => group[faceIndex]);
-                                
-                                        // 遍历当前面的命名方式，找到第一个存在的路径
-                                        for (const faceStr of faceStrings) {
-                                            const replacedPath = channelPath.replace(/\{\}/g, faceStr);
-                                            const cubeFaceExists = await checkFileExists(replacedPath);
-                                
-                                            if (cubeFaceExists) {
-                                                // 找到有效路径，返回结果并跳过后续命名方式
-                                                return replacedPath;
-                                            }
-                                        }
-                                        
-                                        // 如果所有命名方式都不存在，报错
-                                        cubeMapMissingList.push(faceStrings[0]);
-                                    })
-                                );
-
-                                if (cubeMapMissingList.length > 0){
-                                    throw new Error(`Cube map ${cubeMapMissingList.join(", ")} face texture not found: ${channelPath}`);
-                                }
-                            }else{
-                                throw new Error(`Texture file not found: ${channelPath}`);
-                            }
-                            
-                        }
-
-
-
-                        // let channelTextureInfo = {
-                        //     index: this.channelRenderMap.size,
-                        //     type: channelType,
-                        //     dataIndex: textureIndex,
-                        //     settings: channelInfo.settings,
-                        //     isFBO: false,
-                        // }
-
-                        
-                        // const key = [
-                        //     textureIndex,
-                        //     channelInfo.settings.MinFilter,
-                        //     channelInfo.settings.MagFilter,
-                        //     channelInfo.settings.WrapMode
-                        // ].join(",");
-                        
-                        // this.channelRenderMap.set(key, channelTextureInfo);
-                        
-                        break;
-                    case '.glsl':
-                        const channelRenderPassIndex = await this.preprocess(
-                            channelPath,
-                            channelInfo.settings
-                        );
-
-                        let useLastBuffer = false;
-
-                        if (this.branchSet.has(channelRenderPassIndex)) {
-                            const channelPreprocessor = this.renderPassList[channelRenderPassIndex];
-                            channelPreprocessor.isDoubleBuffer = true;
-                            useLastBuffer = true;
-                        }
-
-                        preprocessorOutput.textureUniformInfos.push({
-                            uniformName: uniformName,
-                            type: 'fbo',
-                            renderPassIndex: channelRenderPassIndex,
-                            useLastBuffer: useLastBuffer
-                        });
-
-                        break;
-                    default:
-                        throw new Error(`Unsupported file type: ${fileExtension}`);
-                }
-
-            }
-
-
-        }
-
-        this.branchSet.delete(renderPassIndex);
-
-        this.renderOrder.push(renderPassIndex);
-
-
-        return renderPassIndex;
-    }
-
-}
-
-
-
-
-
-function checkLocalFileExists(filePath: string): boolean {
-    try {
-        return fs.existsSync(filePath); // 同步检查文件是否存在
-    } catch {
-        return false; // 如果路径无效或不可访问，返回 false
-    }
-}
-
-
-
-async function checkHttpUrlExists(url: string): Promise<boolean> {
-    try {
-        const response = await fetch(url, { method: "HEAD" });
-        return response.ok;
-    } catch {
-        return false;
-    }
-}
-
-async function checkFileExists(path: string): Promise<boolean> {
-    if (/^https?:\/\//.test(path)) {
-        // HTTP 地址检测
-        return await checkHttpUrlExists(path);
-    } else {
-        // 本地文件检测
-        return await checkLocalFileExists(path);
-    }
-}
-
-
-
-
-type Value = number | string | boolean;
-
-type ValueReference = 
-    {type: "number", default: number} |
-    {type: "string", default: string} |
-    {type: "boolean", default: boolean} |
-    {type: "enum", default: string, options: string[]};
-
-type ValueReferenceTable = {[key: string]: ValueReference}
-
-function verifyInputValue(valueType: string, valueString: string, referenceTable: ValueReferenceTable): Value {
-    const valueReference = referenceTable[valueType];
-    if (!valueReference) throw new Error(`Invalid setting type: ${valueType}.`); 
-    switch (valueReference.type) {
-        case "number":
-            return Number(valueString);
-        case "string":
-            return valueString;
-        case "boolean":
-            return valueString === "true";
-        case "enum":
-            if (valueReference.options.includes(valueString)) {
-                return valueString;
-            }
-            throw new Error(`The options [${valueReference.options}] of value type "${valueReference.type}" does not contain "${valueString}".`);
-        default:
-            throw new Error(`Invalid value type "${valueType}".`);
-    }
-}
-
-
-
-type MacroMap = Map<string, string | { params: string[]; body: string } | undefined>;
-
-type IfStatementStack = {
-    active: boolean;
-    line: number;
-    type: string;
-}
-
-type ChannelInfo = {filePath: string, settings: ChannelSettings};
-type ChannelMap = Map<string, ChannelInfo>;
-type ChannelSettings = {[key: string]: Value}
 const channelSettingsReferenceTable: ValueReferenceTable = {
     UseLastBuffer: {type: "boolean", default: false},
     MinFilter: {type: "enum", default: "Linear", options: ['Nearest', 'Linear']},
     MagFilter: {type: "enum", default: "Linear", options: ['Nearest', 'Linear']},
     WrapMode: {type: "enum", default: "Linear", options: ['Repeat', 'MirroredRepeat', 'ClampToEdge']}
+}
+
+export type DeclarationDetections = {[key: string]: boolean};
+
+type DeclarationDetectionReferences = {[key: string]: {type: string}};
+const declarationDetectionReferences: DeclarationDetectionReferences = {
+    "iResolution": {type: "vec4"},
+    "iTime": {type: "float"},
+    "iTimeDelta": {type: "float"},
+};
+
+export function getInitDeclarationDetections(): DeclarationDetections{
+    const result: DeclarationDetections = {};
+    for (const key in declarationDetectionReferences) {
+        result[key] = false;
+    }
+    return result;
+}
+
+export type ChannelSettings = {[key: string]: Value}
+
+export type ChannelInfo = {filePath: string, settings: ChannelSettings};
+
+type MacroMap = Map<string, string | { params: string[]; body: string } | undefined>;
+
+type ChannelMap = Map<string, ChannelInfo>;
+
+type IfStatementStack = {
+    active: boolean;
+    line: number;
+    type: string;
 }
 
 type TextureUniformInfo = {
@@ -337,35 +55,42 @@ type TextureUniformInfo = {
     useLastBuffer: boolean;
 }
 
-
-type PreprocessorOutput = {
+export type ChannelOutput = {
     version: string;
     floatPrecision: string;
-    src: string
+    src: string,
+    defaultLocation: number;
+    outputNumber: number;
     textureUniformInfos: TextureUniformInfo[];
+    declarationDetections: DeclarationDetections;
 }
 
-class GLSLPreprocessor {
+
+export class ChannelPreprocessor {
+    
     private mainFilePath: string;
     private macros: MacroMap = new Map();
     private includeSet: Set<string> = new Set();
     private channelInfos: ChannelMap = new Map();
     private fileMap: Map<string, number>;
-    private output: PreprocessorOutput = {
+    private output: ChannelOutput = {
         version: '',
         floatPrecision: '',
         src: '',
-        textureUniformInfos: []
+        defaultLocation: preprocessorSetting.useMinDefinedLocationAsDefault ? 9999 : 0,
+        outputNumber: 1,
+        textureUniformInfos: [],
+        declarationDetections: getInitDeclarationDetections()
     };
     private hasMain: boolean = false;
     private hasMainImage: boolean = false;
-    private location0Output: {
+    private defaultLocationOutput: {
             changed: boolean,
             identifier: string,
             specifier: string
         } = {
             changed: false,
-            identifier: "FragColor",
+            identifier: preprocessorSetting.prefix + "FragColor",
             specifier: "vec4"
         };
 
@@ -374,24 +99,26 @@ class GLSLPreprocessor {
         this.fileMap = fileMap;
     }
 
-    static async create(mainFilePath: string, fileMap: Map<string, number>): Promise<GLSLPreprocessor> {
-        const instance = new GLSLPreprocessor(mainFilePath, fileMap);
+    static async create(mainFilePath: string, fileMap: Map<string, number>): Promise<ChannelPreprocessor> {
+        const instance = new ChannelPreprocessor(mainFilePath, fileMap);
         await instance.init();
         return instance;
     }
 
     
     private async init(): Promise<void> {
-        await this.preprocessSrc();
-        this.astProceess();
+        this.preprocessSrc();
+        await this.astProceess();
         this.addAutoDefaultLines();
     }
 
-    private async preprocessSrc(): Promise<void> {
-        this.output.src = (await this.preprocess(this.mainFilePath)).join('\n');
+    private preprocessSrc(): void {
+        this.output.src = this.preprocess(this.mainFilePath).join('\n');
     }
 
-    private astProceess(): void {
+
+    
+    private async astProceess(): Promise<void> {
         try{
             const ast = parser.parse(this.output.src);
             console.log(ast);
@@ -409,7 +136,7 @@ class GLSLPreprocessor {
             });
 
             // 检查是否包含 location = 0 的 output
-            const location0OutputResult = ast.program.find((item) => {
+            ast.program.find((item) => {
                 if (item.type !== "declaration_statement") return false;
                 const declaration = item.declaration;
                 if (!declaration ||
@@ -421,26 +148,61 @@ class GLSLPreprocessor {
                     if (layoutQualifier.type !== "layout_qualifier" || layoutQualifier.qualifiers.length != 1) return false;
                     const locationQualifier = layoutQualifier.qualifiers[0];
                     if (locationQualifier.identifier.identifier !== 'location' ||
-                        locationQualifier.expression.type !== "int_constant" ||
-                        locationQualifier.expression.token !== '0'
+                        locationQualifier.expression.type !== "int_constant"
                     ) return false;
+
                     const outQualifier = declaration.specified_type.qualifiers[1];
                     if (outQualifier.type !== "keyword" ||
                         outQualifier.token !== "out") return false;
+
+                    if (declaration.specified_type.specifier.specifier.type !== "keyword" ||
+                        declaration.declarations.length !== 1) return false;
+                    
+                    const locationInt = parseInt(locationQualifier.expression.token);
+
+                    if (locationInt <= this.output.defaultLocation) {
+                        this.output.defaultLocation = locationInt;
+                        this.defaultLocationOutput.changed = true;
+                        this.defaultLocationOutput.identifier = declaration.declarations[0].identifier.identifier;
+                        this.defaultLocationOutput.specifier = declaration.specified_type.specifier.specifier.token;
+                    }
+                    
+                    if (locationInt >= this.output.outputNumber) {
+                        this.output.outputNumber = locationInt + 1;
+                    }
+
+                    return false;
                 }else if (declaration.specified_type.qualifiers?.length == 1){
                     const outQualifier = declaration.specified_type.qualifiers[0];
                     if (outQualifier.type !== "keyword" ||
                         outQualifier.token !== "out") return false;
+
+                    if (declaration.specified_type.specifier.specifier.type !== "keyword" ||
+                        declaration.declarations.length !== 1) return false;
+    
+                    this.defaultLocationOutput.changed = true;
+                    this.defaultLocationOutput.identifier = declaration.declarations[0].identifier.identifier;
+                    this.defaultLocationOutput.specifier = declaration.specified_type.specifier.specifier.token;
+                    return true;
                 }else{
                     return false;
                 };
-                if (declaration.specified_type.specifier.specifier.type !== "keyword" ||
-                    declaration.declarations.length !== 1) return false;
 
-                this.location0Output.changed = true;
-                this.location0Output.identifier = declaration.declarations[0].identifier.identifier;
-                this.location0Output.specifier = declaration.specified_type.specifier.specifier.token;
-                return true;
+            });
+
+            // 处理未定义的变量
+            ast.scopes.forEach((scope) => {
+                const bindings = scope.bindings;
+        
+                // 遍历 bindings
+                for (const [key, value] of Object.entries(bindings)) {
+                    if (value.declaration === undefined) {
+                        // 如果 declaration 是 undefined，查询是否为常见变量名
+                        if (this.output.declarationDetections.hasOwnProperty(key)){
+                            this.output.declarationDetections[key] = true;
+                        }
+                    }
+                }
             });
             
 
@@ -493,7 +255,7 @@ class GLSLPreprocessor {
                 const param0Specifier = param0.specifier.specifier;
                 if (
                     param0Specifier.type !== "keyword" ||
-                    param0Specifier.token !== this.location0Output.specifier ||
+                    param0Specifier.token !== this.defaultLocationOutput.specifier ||
                     param0?.qualifier?.length !== 1 ||
                     param0?.qualifier[0]?.token !== "out"
                 ) {
@@ -553,22 +315,31 @@ class GLSLPreprocessor {
             newOutputLines.push(`precision highp float;`);
         }
 
-        if (!this.location0Output.changed) {
+        if (!this.defaultLocationOutput.changed) {
+            this.output.defaultLocation = 0;
             newOutputLines.push(`#line ${-1} ${mainFileNumber}`);
-            newOutputLines.push(`layout(location = 0) out vec4 FragColor;`);
+            newOutputLines.push(`layout(location = 0) out ${this.defaultLocationOutput.specifier} ${this.defaultLocationOutput.identifier};`);
+        }
+
+        for (const [declarationDetection, isDetected] of Object.entries(this.output.declarationDetections)) {
+            if (isDetected) {
+                const declarationDetectionReference = declarationDetectionReferences[declarationDetection];
+                newOutputLines.push(`#line ${-1} ${mainFileNumber}`);
+                newOutputLines.push(`uniform ${declarationDetectionReference.type} ${declarationDetection};`);
+            }
         }
 
         newOutputLines.push(this.output.src);
 
         if (!this.hasMain && this.hasMainImage) {
             newOutputLines.push(`#line ${-2} ${mainFileNumber}`);
-            newOutputLines.push(`void main() {mainImage(${this.location0Output.identifier}, gl_FragCoord.xy);}`);
+            newOutputLines.push(`void main() {mainImage(${this.defaultLocationOutput.identifier}, gl_FragCoord.xy);}`);
         }
         this.output.src = newOutputLines.join("\n");
 
     }
 
-    public getOutput(): PreprocessorOutput {
+    public getOutput(): ChannelOutput {
         return this.output;
     }
 
@@ -594,7 +365,7 @@ class GLSLPreprocessor {
      * @param source GLSL 源代码
      * @returns 预处理后的 GLSL 代码
      */
-    private async preprocess (filePath: string): Promise<string[]> {
+    private preprocess (filePath: string): string[] {
         // #include 只有第一次会复制文件内容，避免重复内容
         if (this.includeSet.has(filePath)) {
             return [];
@@ -619,7 +390,7 @@ class GLSLPreprocessor {
             lastLineNumber = lineNumber - 1 + newLines.length;
         }
 
-        const handleBlockPreprocessors = async (args: string, tokens: string[], line: string): Promise<string[]> => {
+        const handleBlockPreprocessors = (args: string, tokens: string[], line: string): string[] => {
             const directive = tokens[0];
             switch (directive) {
                 case "#define":
@@ -641,7 +412,7 @@ class GLSLPreprocessor {
                     const includeMatch = args.match(/^\s*["'](.+?)["']/);
                     if (includeMatch) {
                         const includePath = path.resolve(path.dirname(filePath), includeMatch[1]);
-                        const includePreprocessedLines = await this.preprocess(includePath);
+                        const includePreprocessedLines = this.preprocess(includePath);
                         return includePreprocessedLines;
                     }
                     return [line];
@@ -747,7 +518,7 @@ class GLSLPreprocessor {
                         break;
                     default:
                         if (includeBlock) {
-                            const fileLines = await handleBlockPreprocessors(args, tokens, line);
+                            const fileLines = handleBlockPreprocessors(args, tokens, line);
                             addLines(fileLines);
                         }
                         break;
@@ -791,6 +562,11 @@ class GLSLPreprocessor {
     
             if (reservedKeywords.has(name)) {
                 throw new Error(`Error: Macro name "${name}" is a reserved keyword at line ${lineNumber}.`);
+            }
+
+            // 检查是否有预处理器默认前缀
+            if (name.startsWith(preprocessorSetting.prefix)) {
+                throw new Error(`Error: Macro name "${name}" cannot have the preprocessor prefix "${preprocessorSetting.prefix}" at line ${lineNumber}.`);
             }
         };
     

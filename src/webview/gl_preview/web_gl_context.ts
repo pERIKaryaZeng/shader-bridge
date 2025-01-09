@@ -2,6 +2,9 @@ import { ShaderData } from '../../vs_code/shader_data';
 import Texture from './texture';
 import Viewer from './viewer';
 
+
+import { PipelineData } from '../../vs_code/pipeline_preprocessor';
+
 // 获取 VS Code API 类型（可选）
 declare function acquireVsCodeApi(): any;
 
@@ -31,7 +34,7 @@ export default class WebGLContext {
             } else if (message.type === 'transferComplete') {
                 // 重组数据
                 const fullData = chunks.join('');
-                const parsedData = JSON.parse(fullData);
+                const parsedData = JSON.parse(fullData) as PipelineData;
                 console.log('Received Data:', parsedData);
                 //document.getElementById('status').textContent = 'Transfer Complete!';
 
