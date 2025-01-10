@@ -1,5 +1,3 @@
-import { ShaderData } from '../../vs_code/shader_data';
-import Texture from './texture';
 import Viewer from './viewer';
 
 

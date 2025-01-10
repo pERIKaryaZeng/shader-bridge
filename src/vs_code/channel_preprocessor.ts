@@ -1,17 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Value, ValueReferenceTable, verifyInputValue } from './value';
-import { preprocessorSetting } from './preprocessor_setting';
+import { Value } from './value';
+import { preprocessorSetting, channelSettingsReferenceManager } from './preprocessor_setting';
 import { removeComments } from './string_tools';
 // Need to remove "type": "module" in @shaderfrog/glsl-parser/package.json
 import { parser, GlslSyntaxError } from '@shaderfrog/glsl-parser';
-
-const channelSettingsReferenceTable: ValueReferenceTable = {
-    UseLastBuffer: {type: "boolean", default: false},
-    MinFilter: {type: "enum", default: "Linear", options: ['Nearest', 'Linear']},
-    MagFilter: {type: "enum", default: "Linear", options: ['Nearest', 'Linear']},
-    WrapMode: {type: "enum", default: "Linear", options: ['Repeat', 'MirroredRepeat', 'ClampToEdge']}
-}
 
 export type DeclarationDetections = {[key: string]: boolean};
 
@@ -432,7 +425,7 @@ export class ChannelPreprocessor {
                             const channelData = this.channelInfos.get(uniformName);
                             if (channelData){
                                 const parameter = ichannelMatch[4];
-                                channelData.settings[settingType] = verifyInputValue(settingType, parameter, channelSettingsReferenceTable);
+                                channelData.settings[settingType] = channelSettingsReferenceManager.verify(settingType, parameter);
                                 return [];
                             }else{
                                 throw new Error(`Can not set "${settingType}", uniform name "${uniformName}" is not initialized before.`);
@@ -461,11 +454,7 @@ export class ChannelPreprocessor {
                             uniformName, 
                             {
                                 filePath: channelPath,
-                                settings: {
-                                    MinFilter: 'Linear',
-                                    MagFilter: 'Linear',
-                                    WrapMode: 'Repeat'
-                                }
+                                settings: {}
                             }
                         ); // 添加到 iChannelFiles Map
                         return [];

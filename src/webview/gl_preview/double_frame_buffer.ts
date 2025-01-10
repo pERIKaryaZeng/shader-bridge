@@ -1,54 +1,30 @@
-import {IFrameBuffer, FrameBuffer, FrameBufferTextureReference} from './frame_buffer';
-import Expression from '../../vs_code/expression';
+import { FrameBufferInterface, FrameBufferTextureReference } from "./frame_buffer_interface";
 
-export default class DoubleFrameBuffer implements IFrameBuffer{
-    private frameBufferA: FrameBuffer;
-    private frameBufferB: FrameBuffer;
+export default class DoubleFrameBuffer<T extends FrameBufferInterface>{
+    private frameBufferA: FrameBufferInterface;
+    private frameBufferB: FrameBufferInterface;
     private isFlipped: boolean = false;
     constructor(
+        FrameBufferClass: new (gl: WebGL2RenderingContext, props: any) => T, // 通过构造函数类型约束
         gl: WebGL2RenderingContext,
-        width: Expression,
-        height: Expression,
-        textureWrapS: number,
-        textureWrapT: number,
-        textureWrapR: number,
-        textureMinFilter: number,
-        textureMagFilter: number,
-        outputNumber: number,
-        isCubeMap: boolean = false
+        props: Object
     ) {
-        this.frameBufferA = new FrameBuffer(
+        this.frameBufferA = new FrameBufferClass(
             gl,
-            width,
-            height,
-            textureWrapS,
-            textureWrapT,
-            textureWrapR,
-            textureMinFilter,
-            textureMagFilter,
-            outputNumber,
-            isCubeMap
+            props
         );
         
-        this.frameBufferB = new FrameBuffer(
+        this.frameBufferB = new FrameBufferClass(
             gl,
-            width,
-            height,
-            textureWrapS,
-            textureWrapT,
-            textureWrapR,
-            textureMinFilter,
-            textureMagFilter,
-            outputNumber,
-            isCubeMap
+            props
         );
     }
 
-    private getCurrentFrameBuffer(): FrameBuffer {
+    private getCurrentFrameBuffer(): FrameBufferInterface {
         return this.isFlipped ? this.frameBufferB : this.frameBufferA;
     }
 
-    private getPreviousFrameBuffer(): FrameBuffer {
+    private getPreviousFrameBuffer(): FrameBufferInterface {
         return this.isFlipped ? this.frameBufferA : this.frameBufferB;
     }
 
@@ -60,13 +36,13 @@ export default class DoubleFrameBuffer implements IFrameBuffer{
         return this.getCurrentFrameBuffer().get();
     }
 
-    public getSize(): { width: number; height: number } {
-        return this.getCurrentFrameBuffer().getSize();
-    }
+    // public getSize(): { width: number; height: number } {
+    //     return this.getCurrentFrameBuffer().getSize();
+    // }
 
-    public resize(newWidth: number, newHeight: number): void {
-        this.frameBufferA.resize(newWidth, newHeight);
-        this.frameBufferB.resize(newWidth, newHeight);
+    public resize(): void {
+        this.frameBufferA.resize();
+        this.frameBufferB.resize();
     }
 
     public bind(): void {

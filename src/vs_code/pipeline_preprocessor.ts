@@ -43,9 +43,6 @@ export class PipelinePreprocessor {
 
     private async init(): Promise<void> {
         await this.preprocess(this.mainFilePath);
-        console.log("preprocessorOutputs: ", this.channelOutputs);
-        console.log("renderPassList: ", this.renderPassList);
-        console.log("renderOrder: ", this.renderOrder);
     }
 
     

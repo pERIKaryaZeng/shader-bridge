@@ -1,12 +1,4 @@
-import WebGLContext from './web_gl_context';
-import { RenderPassInfo, getDefaultRenderPassInfo } from '../../vs_code/shader_data';
 import { generateRandomId } from '../../vs_code/string_tools';
-
-interface FileAndLineInfo {
-    filePath: string;
-    localLine: number;
-    treeIndex: number;
-}
 
 export default class Shader {
     private gl: WebGL2RenderingContext; // 改为 WebGL2RenderingContext

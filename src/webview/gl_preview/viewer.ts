@@ -1,29 +1,33 @@
 // import WebGLContext from './web_gl_context';
-import ShaderProgram from './shader_program';
-import Shader from './shader';
-import RenderPass from './render_pass';
-import Pipeline from './pipeline';
-import { FrameBuffer, IFrameBuffer } from './frame_buffer';
-import DoubleFrameBuffer from './double_frame_buffer';
-import { PipelineData } from '../../vs_code/pipeline_preprocessor';
+
+// import RenderPass from './render_pass';
+// import Pipeline from './pipeline';
+// import { FrameBuffer, IFrameBuffer } from './frame_buffer';
 // import { TextureSourceInfo } from './texture_source';
 // import Texture from './texture';
 // import { getDefaultRenderPassInfo } from '../../vs_code/shader_data';
 // import Expression from '../../vs_code/expression';
+import Shader from './shader';
+import ShaderProgram from './shader_program';
+import { PipelineData } from '../../vs_code/pipeline_preprocessor';
 import Stats from 'stats.js';
 
-
+import { FrameBufferInterface, FrameBufferTextureReference } from "./frame_buffer_interface";
+import FrameBuffer2D from './frame_buffer_2d';
+import FrameBufferCubeMap from './frame_buffer_cube_map';
+import DoubleFrameBuffer from './double_frame_buffer';
+import { Expression, globalExpressionContext } from '../../vs_code/expression';
 
 
 
 export default class Viewer {
-    private pipeline!: Pipeline;
+    //private pipeline!: Pipeline;
     // private webglContext!: WebGLContext;
     // private gl!: WebGL2RenderingContext; // 改为 WebGL2RenderingContext
     private currentTime: number = 0;
     private startTime: number | null = null;
     // private initializationPromise: Promise<void>;
-    private frameBuffers: IFrameBuffer[] = [];
+    //private frameBuffers: IFrameBuffer[] = [];
     private paused: boolean = true; // 控制暂停状态
     private mouse: {x: number, y: number} = {x: 0, y: 0}; // 鼠标位置帧计数器
     private stats: Stats = new Stats();
@@ -73,7 +77,6 @@ export default class Viewer {
             throw new Error(pipelineData.error);
         }
 
-        this.frameBuffers = [];
         // 初始化着色器
         const vertexShaderSource = 
             `#version 300 es
@@ -130,9 +133,83 @@ export default class Viewer {
         const vertexShader = new Shader(this.gl, this.gl.VERTEX_SHADER, vertexShaderSource);
 
         const shaderProgramList: ShaderProgram[] = [];
-        for (const preprocessorOutput of pipelineData.channelOutputs) {
-            const fragmentShader = new Shader(this.gl, this.gl.FRAGMENT_SHADER, preprocessorOutput.src, pipelineData.fileList);
+        for (const channelOutput of pipelineData.channelOutputs) {
+            const fragmentShader = new Shader(this.gl, this.gl.FRAGMENT_SHADER, channelOutput.src, pipelineData.fileList);
             shaderProgramList.push(new ShaderProgram(this.gl, vertexShader, fragmentShader));
+        }
+
+
+        //const passes: RenderPass[] = [];
+        for (const renderPassInfo of pipelineData.renderPassList) {
+            const requireShaderProgram = shaderProgramList[renderPassInfo.channelIndex];
+            const channelOutput = pipelineData.channelOutputs[renderPassInfo.channelIndex];
+
+
+            let frameBuffer: FrameBufferInterface;
+            let textureType = "";
+            switch (textureType){
+            case "textureCubeMap":
+                frameBuffer = new DoubleFrameBuffer(
+                    FrameBufferCubeMap,
+                    this.gl,
+                    {
+                        outputNumber: channelOutput.outputNumber,
+
+                    }
+                );
+                break
+            case "texture2d":
+            default:
+                frameBuffer = new DoubleFrameBuffer(
+                    FrameBuffer2D,
+                    this.gl,
+                    {
+                        outputNumber: channelOutput.outputNumber,
+                        
+                    }
+                );
+                break
+            }
+
+
+
+            // let frameBuffer: FrameBufferInterface;
+            // if (renderPassInfo.isDoubleBuffer){
+
+            // }else{
+            //     frameBuffer = new FrameBuffer2D(
+            //         this.gl,
+            //         {
+            //             outputNumber: channelOutput.outputNumber,
+            //             width: renderPassInfo.settings.width,
+            //         }
+            //         renderPassInfo.settings
+            //     );
+            // }
+            
+
+                // frameBuffer = new DoubleFrameBuffer(
+                //     this.gl,
+                //     width:renderPassInfo.settings.width,
+                //     renderPassInfo.settings.width,
+                //     renderPassInfo.settings.textureWrapS,
+                //     renderPassInfo.settings.textureWrapT,
+                //     renderPassInfo.settings.textureWrapR,
+                //     renderPassInfo.settings.textureMinFilter,
+                //     renderPassInfo.settings.textureMagFilter,
+                //     1,
+                //     renderPassInfo.isCubeMap
+                // );
+            
+
+            // passes.push(
+            //     new RenderPass(
+            //         this.gl,
+            //         shaderProgramList[renderPassInfo.channelIndex],
+            //         textureSourceInfos,
+            //         this.frameBuffers[index]
+            //     )
+            // );
         }
 
 
@@ -261,13 +338,13 @@ export default class Viewer {
         this.startTime = timestamp;
 
         this.currentTime += deltaTime;
-        this.pipeline.update({
-            time: this.currentTime,
-            timeDelta: deltaTime,
-            mouse: this.mouse
-        });
+        // this.pipeline.update({
+        //     time: this.currentTime,
+        //     timeDelta: deltaTime,
+        //     mouse: this.mouse
+        // });
 
-        this.pipeline.endFrame();
+        // this.pipeline.endFrame();
         this.stats.update();
         requestAnimationFrame((ts) => this.loop(ts));
     }
@@ -277,10 +354,10 @@ export default class Viewer {
         // 初始化时间控制
         this.currentTime = 0;
         this.startTime = null;
-        for (const frameBuffer of this.frameBuffers) {
-            if (frameBuffer == null) continue;
-            frameBuffer.clearTextures([0.0,0.0,0.0,0.0]);
-        }
+        // for (const frameBuffer of this.frameBuffers) {
+        //     if (frameBuffer == null) continue;
+        //     frameBuffer.clearTextures([0.0,0.0,0.0,0.0]);
+        // }
         if (this.paused){
             this.paused = false;
             requestAnimationFrame((ts) => this.loop(ts));

@@ -1,19 +1,23 @@
-export default class Expression {
+export const globalExpressionContext = {
+    vh: 1024,
+    vw: 1024,
+}
+
+export class Expression {
     private fn: Function;
     private context: any;
-    private expression: string;
     private result: any;
 
     constructor(expression: string, context: any) {
-        this.expression = expression;
+        this.context = context;
         this.fn = new Function('context', `with (context) { return ${expression}; }`);
-        this.update(context);
+        this.update();
     }
 
-    public update(context: any){
+    public update(){
         console.log('Calculating expression...');
         try {
-            const result = this.fn(context);
+            const result = this.fn(this.context);
             console.log(`Result: ${result}`);
             this.result = result;
         } catch (e) {
@@ -21,10 +25,7 @@ export default class Expression {
         }
     }
 
-    public get(context: any = null): any{
-        if (context) {
-            this.update(context);
-        }
+    public get(): any{
         return this.result;
     }
 }

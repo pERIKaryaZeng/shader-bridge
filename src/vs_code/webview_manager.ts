@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { encodeBase64 } from './string_tools';
 import { PipelinePreprocessor, PipelineData } from './pipeline_preprocessor';
-import { ShaderData } from './shader_data';
 
 // 用于存储 WebviewPanel 的全局变量
 let panel: vscode.WebviewPanel | undefined;
@@ -39,6 +38,7 @@ export const showGLSLPreview = async(context: vscode.ExtensionContext, uri: vsco
     try{
         const pipelinePreprocessor = await PipelinePreprocessor.create(mainfilePath);
         pipelineData = pipelinePreprocessor.getOutput();
+        console.log("Pipeline Data: ", pipelineData);
     }catch (error) {
         if (error instanceof Error) {
             pipelineData = {
