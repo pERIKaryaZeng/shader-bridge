@@ -1,4 +1,4 @@
-import { ValueReferenceTable, ValueReference,  ValueReferenceManager } from './value';
+import { Value, ValueReferenceTable, ValueReference, ValueReferenceManager } from './value';
 
 export const preprocessorSetting = {
     // 如果为 true，会使用此channel定义的最小location作为默认mainImage的输出，以及其他channel的默认读取
@@ -7,75 +7,102 @@ export const preprocessorSetting = {
 
 }
 
-const filterValueReference: ValueReference = {
-    type: "enum",
-    options: {
-        nearest: "Nearest",
-        Nearest: "Nearest",
-        NEAREST: "Nearest",
-        linear: "Linear",
-        Linear: "Linear",
-        LINEAR: "Linear",
-    }
-};
+function addOtherCases(baseOptions: { [key: string]: Value }) : ValueReference {
+    const resultOptions: { [key: string]: Value } = { ...baseOptions };
 
-const wrapModeValueReference: ValueReference = {
-    type: "enum",
-    options: {
-        repeat: 'Repeat',
-        Repeat: 'Repeat',
-        REPEAT: 'Repeat',
-        mirroredRepeat: 'MirroredRepeat',
-        MirroredRepeat: 'MirroredRepeat',
-        mirrored_repeat: 'MirroredRepeat',
-        MIRRORED_REPEAT: 'MirroredRepeat',
-        clampToEdge: 'ClampToEdge',
-        ClampToEdge: 'ClampToEdge',
-        clamp_to_edge: 'ClampToEdge',
-        CLAMP_TO_EDGE: 'ClampToEdge',
-    }
-};
+    Object.keys(baseOptions).forEach((key) => {
+        const value = baseOptions[key];
 
-const channelSettingsReferenceTable: ValueReferenceTable = {
-    use_last_buffer: {type: "boolean"},
-    width: {type: "string"},
-    hight: {type: "string"},
-    min_filter: filterValueReference,
-    mag_filter: filterValueReference,
-    wrap_mode: wrapModeValueReference,
-    wrap_mode_s: wrapModeValueReference,
-    wrap_mode_t: wrapModeValueReference,
-    wrap_mode_r: wrapModeValueReference,
+        // 生成驼峰（camelCaseKey）
+        const camelCaseKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+
+        // 生成首字母大写驼峰（PascalCaseKey）
+        const pascalCaseKey = camelCaseKey.charAt(0).toUpperCase() + camelCaseKey.slice(1);
+
+        // 生成下划线全小写（snake_case_key）
+        const snakeCaseKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+        // 生成下划线全大写（SNAKE_CASE_KEY）
+        const snakeCaseUpperKey = snakeCaseKey.toUpperCase();
+
+        // 将映射添加到结果表
+        if (!resultOptions[camelCaseKey]) {
+            resultOptions[camelCaseKey] = value;
+        }
+        if (!resultOptions[pascalCaseKey]) {
+            resultOptions[pascalCaseKey] = value;
+        }
+        if (!resultOptions[snakeCaseKey]) {
+            resultOptions[snakeCaseKey] = value;
+        }
+        if (!resultOptions[snakeCaseUpperKey]) {
+            resultOptions[snakeCaseUpperKey] = value;
+        }
+    });
+
+    return {
+        type: "enum",
+        options: resultOptions
+    };
 }
 
-const upperCaseChannelSettingsReferenceTable = Object.entries(channelSettingsReferenceTable).reduce(
-    (acc, [key, value]) => {
-      acc[key.toUpperCase()] = value;
-      return acc;
-    },
-    {} as ValueReferenceTable
-);
+const filterValueReference = addOtherCases({
+    nearest: "nearest",
+    linear: "linear",
+});
 
-// 将下划线后的首字母变为大写
-const camelCaseChannelSettingsReferenceTable = Object.entries(channelSettingsReferenceTable).reduce(
-    (acc, [key, value]) => {
-      const camelCaseKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      acc[camelCaseKey] = value;
-      return acc;
-    },
-    {} as ValueReferenceTable
-);
+const wrapModeValueReference = addOtherCases({
+    repeat: 'repeat',
+    mirrored_repeat: 'mirrored_repeat',
+    clamp_to_edge: 'clamp_to_edge',
+});
 
-export const channelSettingsReferenceManager = new ValueReferenceManager([
-    {
-        table: channelSettingsReferenceTable,
-        transformKey: (key: string) => key
-    }, {
-        table: upperCaseChannelSettingsReferenceTable,
-        transformKey: (key: string) => key.toUpperCase()
-    }, {
-        table: camelCaseChannelSettingsReferenceTable, 
-        transformKey: 
-            (key: string) => key.replace(/^([A-Z])/, (_, letter) => letter.toLowerCase()) // 将首字母小写}
-    }
-]);
+const channelSettingsReferenceTable: ValueReferenceTable = (() => {
+    // 必须是snakeCaseKey 或 camelCaseKey
+    const baseTable: ValueReferenceTable = {
+        use_last_buffer: { type: "boolean" },
+        width: { type: "string" },
+        height: { type: "string" },
+        length: { type: "string" },
+        min_filter: filterValueReference,
+        mag_filter: filterValueReference,
+        wrap_mode: wrapModeValueReference,
+        wrap_mode_s: wrapModeValueReference,
+        wrap_mode_t: wrapModeValueReference,
+        wrap_mode_r: wrapModeValueReference,
+    };
+
+    const resultTable: ValueReferenceTable = { ...baseTable };
+
+    Object.keys(baseTable).forEach((key) => {
+        // 生成驼峰（camelCaseKey）
+        const camelCaseKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+
+        // 生成首字母大写驼峰（PascalCaseKey）
+        const pascalCaseKey = camelCaseKey.charAt(0).toUpperCase() + camelCaseKey.slice(1);
+
+        // 生成下划线全小写（snake_case_key）
+        const snakeCaseKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+        // 生成下划线全大写（SNAKE_CASE_KEY）
+        const snakeCaseUpperKey = snakeCaseKey.toUpperCase();
+
+        // 将映射添加到结果表
+        if (!resultTable[camelCaseKey]) {
+            resultTable[camelCaseKey] = { type: "mapping", key };
+        }
+        if (!resultTable[pascalCaseKey]) {
+            resultTable[pascalCaseKey] = { type: "mapping", key };
+        }
+        if (!resultTable[snakeCaseKey]) {
+            resultTable[snakeCaseKey] = { type: "mapping", key };
+        }
+        if (!resultTable[snakeCaseUpperKey]) {
+            resultTable[snakeCaseUpperKey] = { type: "mapping", key };
+        }
+    });
+
+    return resultTable;
+})();
+
+export const channelSettingsReferenceManager = new ValueReferenceManager(channelSettingsReferenceTable);

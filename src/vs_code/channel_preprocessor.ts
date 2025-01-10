@@ -425,7 +425,8 @@ export class ChannelPreprocessor {
                             const channelData = this.channelInfos.get(uniformName);
                             if (channelData){
                                 const parameter = ichannelMatch[4];
-                                channelData.settings[settingType] = channelSettingsReferenceManager.verify(settingType, parameter);
+                                const {keyName: settingKey, value: settingValue }= channelSettingsReferenceManager.verify(settingType, parameter);
+                                channelData.settings[settingKey] = settingValue;
                                 return [];
                             }else{
                                 throw new Error(`Can not set "${settingType}", uniform name "${uniformName}" is not initialized before.`);
